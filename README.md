@@ -39,3 +39,44 @@ The host token is kept in that host browser's session storage. Keep the host tab
 The host sees the full answer list; phones see only revealed answers. The active team has 60 seconds for each regular answer. Answers are compared after lowercasing, trimming, collapsing whitespace, and removing punctuation; matching is exact, with no synonym matching. A correct unrevealed answer reveals its points and keeps control. Wrong, repeated, or timed-out answers add a strike. On three strikes, the other team gets one 45-second steal attempt. A correct steal takes the question's accumulated points; a failed or timed-out steal leaves them with the original team. Revealing every answer ends the question and awards its points to the active team. The host can also add a strike, pass control to a steal, clear a submission, or type and resolve an answer for a disconnected team.
 
 The host can click **Question editor** between sessions to add, edit, delete, and reorder questions and answers. Each question needs at least two unique answers with positive integer points. The built-in Christmas question bank is ready to play. **Export JSON** downloads the current bank; **Import JSON** loads a question array into the editor, and **Save questions** applies it to the room. Question edits apply only to that room and remain in server memory until shutdown.
+
+## Deploy for a class party
+
+### A. Render
+
+1. In Render, choose **New → Web Service → connect repo**.
+2. Select the **Node** runtime.
+3. Set the build command to `npm install` and the start command to `npm start`.
+4. Deploy, then share the service's **HTTPS URL** with the class. Share the public HTTPS address, never a LAN IP.
+
+The free tier sleeps after about 15 minutes idle and can take about 50 seconds to wake. Open the URL about 10 minutes before the party so it is awake when classmates arrive.
+
+### B. Cloudflare Tunnel (no account)
+
+Start the app with `npm install && npm start`, then run:
+
+```sh
+cloudflared tunnel --url http://localhost:3000
+```
+
+Share the printed `https://*.trycloudflare.com` URL. The URL changes each time the tunnel restarts.
+
+### C. ngrok
+
+Start the app with `npm install && npm start`, then run:
+
+```sh
+ngrok http 3000
+```
+
+Share the printed HTTPS URL. On the free tier, each classmate must click the **Visit Site** interstitial once. The URL changes each time ngrok restarts.
+
+### Public URL and health check
+
+The app builds its join link and QR code from the current public origin. If a proxy rewrites the request origin, set `PUBLIC_URL` to the public base URL (for example, `https://party.example.com`) so the displayed link and QR code use the externally reachable address. `GET /healthz` returns `200` with `{ "ok": true }` for deployment warm-up and health checks.
+
+| Problem | Check |
+|---|---|
+| players can't connect | Confirm the URL is HTTPS and public, not a LAN address such as 192.168.x.x. |
+| connects then drops | The tunnel may be dead or Render may be asleep. |
+| Socket.IO 400 / websocket error | Check for a hardcoded `ws://` URL or missing proxy trust configuration. |

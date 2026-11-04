@@ -3,11 +3,13 @@ const express = require('express');
 const http = require('node:http');
 const path = require('node:path');
 const { Server } = require('socket.io');
+const QRCode = require('qrcode');
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT || 3000);
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { cors: { origin: true, credentials: true } });
 const rooms = new Map();
 
 const defaultQuestions = [
@@ -104,8 +106,23 @@ const defaultQuestions = [
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/host', (req, res) => res.sendFile(path.join(__dirname, 'public', 'host.html')));
-app.get('/play', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
+app.get('/host', (req, res) => res.redirect(302, '/#host'));
+app.get('/play', (req, res) => res.redirect(302, '/#join'));
+app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
+app.get('/config', (req, res) => res.json({ publicUrl: process.env.PUBLIC_URL || null }));
+app.get('/qr.svg', async (req, res, next) => {
+  try {
+    const joinUrl = new URL(String(req.query.url || ''));
+    const base = new URL(process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`);
+    if (!['http:', 'https:'].includes(joinUrl.protocol) || joinUrl.origin !== base.origin || !joinUrl.searchParams.has('room')) {
+      return res.status(400).send('Invalid join URL.');
+    }
+    const svg = await QRCode.toString(joinUrl.toString(), { type: 'svg', errorCorrectionLevel: 'M', margin: 2 });
+    res.type('svg').send(svg);
+  } catch (error) {
+    next(error);
+  }
+});
 
 function roomChannel(code) { return `room:${code}`; }
 function hostChannel(code) { return `host:${code}`; }
@@ -113,7 +130,7 @@ function hostChannel(code) { return `host:${code}`; }
 function safeQuestions(questions) {
   return questions.map((item) => ({
     question: item.question,
-    answers: [...item.answers].sort((a, b) => b.points - a.points)
+    answers: item.answers.map((answer) => ({ ...answer }))
   }));
 }
 
@@ -126,6 +143,7 @@ function hostSnapshot(room) {
       name: player.name,
       team: player.team,
       connected: player.connected,
+      played: room.playedPlayerIds.has(player.id),
       waiting: !session || !session.playerIds.includes(player.id)
     })),
     questions: room.questions,
@@ -363,7 +381,7 @@ function validateQuestions(value) {
     if (new Set(answers.map((answer) => normalizeAnswer(answer.text))).size !== answers.length) {
       fail(`Question ${index + 1} has duplicate answers.`);
     }
-    return { question, answers: answers.sort((a, b) => b.points - a.points) };
+    return { question, answers };
   });
 }
 
@@ -377,6 +395,7 @@ function createRoom() {
     code,
     hostToken: crypto.randomBytes(24).toString('hex'),
     players: new Map(),
+    playedPlayerIds: new Set(),
     questions: safeQuestions(defaultQuestions),
     totals: { blue: 0, red: 0 },
     sessionNumber: 0,
@@ -411,7 +430,17 @@ io.on('connection', (socket) => {
     if (!room || room.hostToken !== token) fail('Host token mismatch or room no longer exists.');
     socket.join(roomChannel(room.code));
     socket.join(hostChannel(room.code));
+    socket.emit('hostState', hostSnapshot(room));
     return { state: hostSnapshot(room) };
+  });
+
+  respond(socket, 'hostLeave', ({ code, token }) => {
+    const room = rooms.get(String(code || '').toUpperCase());
+    if (!room || room.hostToken !== token) fail('Host token mismatch or room no longer exists.');
+    if (room.session) fail('End the active session before leaving the room.');
+    socket.leave(roomChannel(room.code));
+    socket.leave(hostChannel(room.code));
+    return {};
   });
 
   respond(socket, 'joinRoom', ({ code, name, playerId }) => {
@@ -437,6 +466,7 @@ io.on('connection', (socket) => {
     socket.join(roomChannel(room.code));
     const duplicateName = [...room.players.values()].some((other) => other.id !== player.id && other.name.toLocaleLowerCase() === cleanName.toLocaleLowerCase());
     io.to(hostChannel(room.code)).emit('playerJoined', { id: player.id, name: player.name });
+    socket.emit('playerState', playerSnapshot(room, player));
     broadcast(room);
     return { code: room.code, playerId: player.id, duplicateName, state: playerSnapshot(room, player) };
   });
@@ -593,7 +623,10 @@ io.on('connection', (socket) => {
       room.history.push({ number: session.number, blue: session.scores.blue, red: session.scores.red, questions: session.completedQuestions });
       for (const id of session.playerIds) {
         const player = room.players.get(id);
-        if (player) player.team = null;
+        if (player) {
+          player.team = null;
+          room.playedPlayerIds.add(id);
+        }
       }
       room.session = null;
       return {};
@@ -604,7 +637,19 @@ io.on('connection', (socket) => {
       if (room.session?.playerIds.includes(playerId)) fail('End the session before removing its players.');
       if (player.connected) io.to(player.socketId).emit('playerRemoved', 'The host removed you from the room.');
       room.players.delete(playerId);
+      room.playedPlayerIds.delete(playerId);
       return {};
+    }),
+    removeAllPlayedPlayers: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
+      if (room.session) fail('End the session before removing played players.');
+      for (const playerId of room.playedPlayerIds) {
+        const player = room.players.get(playerId);
+        if (player?.connected) io.to(player.socketId).emit('playerRemoved', 'The host removed the played group from the room.');
+        room.players.delete(playerId);
+      }
+      const removed = room.playedPlayerIds.size;
+      room.playedPlayerIds.clear();
+      return { removed };
     }),
     updateQuestions: ({ code, token, questions }) => hostAction(socket, { code, token }, (room) => {
       if (room.session) fail('Questions can only be edited while the room is between sessions.');
@@ -617,6 +662,7 @@ io.on('connection', (socket) => {
         if (player.connected) io.to(player.socketId).emit('playerRemoved', 'The host reset the room.');
       }
       room.players.clear();
+      room.playedPlayerIds.clear();
       room.totals = { blue: 0, red: 0 };
       room.sessionNumber = 0;
       room.session = null;
@@ -639,5 +685,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Christmas Family Feud is ready at http://localhost:${PORT}`);
+  console.log(`Christmas Family Feud is listening on port ${PORT}.`);
 });

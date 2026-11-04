@@ -6,26 +6,181 @@
   <meta name="theme-color" content="#174a38">
   <title>Christmas Family Feud</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="/app.js" defer></script>
 </head>
-<body class="landing-page">
-  <main class="landing-shell">
-    <div class="landing-mark" aria-hidden="true">
-      <svg viewBox="0 0 96 96" role="img">
-        <path d="M48 8 20 48h16L18 72h22v16h16V72h22L60 48h16L48 8Z" fill="currentColor"/>
-        <circle cx="48" cy="39" r="5" fill="#d94c43"/>
-        <circle cx="37" cy="60" r="4" fill="#f3d982"/>
-        <circle cx="59" cy="60" r="4" fill="#f3d982"/>
-      </svg>
+<body>
+  <main id="landing-view" class="landing-page">
+    <div class="landing-shell">
+      <div class="landing-mark" aria-hidden="true">
+        <svg viewBox="0 0 96 96" role="img">
+          <path d="M48 8 20 48h16L18 72h22v16h16V72h22L60 48h16L48 8Z" fill="currentColor"/>
+          <circle cx="48" cy="39" r="5" fill="#d94c43"/>
+          <circle cx="37" cy="60" r="4" fill="#f3d982"/>
+          <circle cx="59" cy="60" r="4" fill="#f3d982"/>
+        </svg>
+      </div>
+      <p class="eyebrow">A holiday party game</p>
+      <h1>Christmas<br><span>Family Feud</span></h1>
+      <p class="landing-copy">Two teams. Big guesses. One very festive scoreboard.</p>
+      <div class="landing-actions">
+        <a class="button button-primary" href="#host">Host a Game <span aria-hidden="true">↗</span></a>
+        <a class="button button-light" href="#join">Join a Game <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="landing-footer"><span>BLUE vs RED</span><span>PLAY TOGETHER, EVERYWHERE IN THE ROOM</span></div>
     </div>
-    <p class="eyebrow">A holiday party game</p>
-    <h1>Christmas<br><span>Family Feud</span></h1>
-    <p class="landing-copy">Two teams. Big guesses. One very festive scoreboard.</p>
-    <div class="landing-actions">
-      <a class="button button-primary" href="/host">Host a Game <span aria-hidden="true">↗</span></a>
-      <a class="button button-light" href="/play">Join a Game <span aria-hidden="true">→</span></a>
-    </div>
-    <div class="landing-footer"><span>BLUE vs RED</span><span>PLAY TOGETHER, EVERYWHERE IN THE ROOM</span></div>
+    <div class="landing-snow" aria-hidden="true">✳ &nbsp; ✦ &nbsp; ✳</div>
   </main>
-  <div class="landing-snow" aria-hidden="true">✳ &nbsp; ✦ &nbsp; ✳</div>
+
+  <section id="host-route" class="host-page" hidden>
+    <header class="topbar">
+      <a class="wordmark" href="#" aria-label="Christmas Family Feud home"><span class="wordmark-tree">✳</span> CHRISTMAS <b>FEUD</b></a>
+      <div class="topbar-right">
+        <span id="connection-status" class="connection"><i></i> Connecting</span>
+        <button id="host-leave" class="text-link">Leave room</button>
+      </div>
+    </header>
+    <main class="host-main">
+      <section id="create-panel" class="create-panel">
+        <p class="eyebrow">Host control room</p>
+        <h1>Bring on the<br><span>holiday guesses.</span></h1>
+        <p>Create a room, put the code on the projector, and let the teams roll in.</p>
+        <div id="host-error" class="message" role="status" hidden></div>
+        <div id="host-reconnecting" class="reconnecting-message" hidden>Reconnecting as host…</div>
+        <button id="create-room" class="button button-primary">Create a room <span aria-hidden="true">→</span></button>
+        <a id="host-back-link" class="host-back-link" href="#">Back to home</a>
+      </section>
+
+      <div id="dashboard" class="dashboard" hidden>
+        <section class="room-banner">
+          <div class="room-info">
+            <p class="eyebrow">Room code · share with players</p>
+            <div id="room-code" class="room-code">-----</div>
+            <a id="join-url" class="join-url" href="#" target="_blank" rel="noopener"></a>
+            <button id="copy-link" class="button button-light copy-link">Copy link</button>
+          </div>
+          <div class="qr-share">
+            <img id="join-qr" alt="QR code to join this game">
+            <span>Scan to join</span>
+          </div>
+          <div class="room-banner-note"><span class="live-dot"></span><span><b id="player-count">0 players</b><br>in the room</span></div>
+        </section>
+
+        <section class="score-strip" aria-label="Cumulative team scores">
+          <div class="score-team score-blue"><span class="team-label">BLUE</span><strong id="blue-total">0</strong><small>cumulative points</small></div>
+          <div class="score-center"><span class="score-divider">✳</span><span id="session-label">NO SESSION</span></div>
+          <div class="score-team score-red"><span class="team-label">RED</span><strong id="red-total">0</strong><small>cumulative points</small></div>
+        </section>
+
+        <div id="message" class="message" role="status" hidden></div>
+        <div class="host-columns">
+          <aside class="host-sidebar">
+            <section class="panel players-panel">
+              <div class="section-heading"><div><p class="eyebrow">The room</p><h2>Players <span id="players-heading-count">0</span></h2></div></div>
+              <div id="players-list" class="players-list"></div>
+              <div class="sidebar-actions">
+                <button id="start-session" class="button button-primary button-wide">Start session</button>
+                <button id="start-question" class="button button-dark button-wide" hidden>Start first question</button>
+                <button id="question-editor-open" class="button button-outline button-wide">Question editor</button>
+                <button id="remove-all-played" class="button button-outline button-wide" hidden>Remove all played players</button>
+                <button id="end-session" class="button button-outline button-wide" hidden>End session &amp; bank points</button>
+                <button id="reset-room" class="button button-quiet button-wide">Reset room</button>
+              </div>
+              <p class="small-note">Up to 10 connected players per session. Remove a finished group before inviting the next.</p>
+            </section>
+          </aside>
+          <section class="game-area">
+            <div id="ready-view" class="panel ready-view">
+              <div class="ready-ornament" aria-hidden="true">✳</div>
+              <p class="eyebrow">Ready when you are</p>
+              <h2>Set the teams.<br>Start the fun.</h2>
+              <p>Create a session when at least four players are waiting. Odd players and extras stay in the room for the next round.</p>
+            </div>
+            <div id="board-view" class="panel board-view" hidden>
+              <div class="board-topline"><span id="question-number" class="eyebrow">QUESTION 1</span><span id="board-mode" class="mode-tag">REGULAR TURN</span></div>
+              <h1 id="question-text" class="question-title">Question text</h1>
+              <div class="turn-row">
+                <div id="active-team" class="active-team"><span class="active-team-dot"></span><span>BLUE TEAM</span></div>
+                <div class="timer-wrap"><span class="timer-caption">TIME</span><strong id="timer">60</strong><small>sec</small></div>
+              </div>
+              <div class="question-scoreline"><span>QUESTION POINTS</span><strong id="question-points">0</strong></div>
+              <div id="answer-board" class="answer-board"></div>
+              <div class="strike-line"><span class="eyebrow">STRIKES</span><div><span id="blue-strikes" class="strike-team"><b>BLUE</b><i>○ ○ ○</i></span><span id="red-strikes" class="strike-team"><b>RED</b><i>○ ○ ○</i></span></div></div>
+              <div id="submission-box" class="submission-box" hidden>
+                <div><span class="eyebrow">TEAM SUBMISSION</span><strong id="submitted-answer">—</strong><small id="submitted-by"></small></div>
+                <button id="clear-submission" class="icon-button" title="Clear current submission" aria-label="Clear current submission">×</button>
+              </div>
+              <div id="host-override" class="host-override">
+                <label for="override-answer">Host answer / override</label>
+                <div class="override-row"><input id="override-answer" maxlength="80" placeholder="Type what the team said"><button id="resolve-answer" class="button button-red">Resolve answer</button></div>
+              </div>
+              <div id="round-result" class="round-result" hidden></div>
+              <div class="board-controls">
+                <button id="add-strike" class="button button-outline">Add strike</button>
+                <button id="pass-control" class="button button-outline">Pass control / steal</button>
+                <button id="skip-timer" class="button button-outline">Skip timer</button>
+                <button id="next-question" class="button button-primary" hidden>Next question →</button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <section id="final-score" class="final-score panel" hidden>
+          <p class="eyebrow">Session complete</p><h2>That’s a wrap.</h2>
+          <p id="final-copy"></p>
+        </section>
+      </div>
+    </main>
+    <div id="editor-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-close-editor></div>
+      <section class="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+        <header class="editor-header"><div><p class="eyebrow">Room question bank</p><h2 id="editor-title">Question editor</h2></div><button id="editor-close" class="icon-button" aria-label="Close question editor">×</button></header>
+        <div id="editor-message" class="message" role="status" hidden></div>
+        <div class="editor-toolbar"><button id="add-question" class="button button-outline">＋ Add question</button><div><button id="export-questions" class="button button-quiet">Export JSON</button><button id="import-questions" class="button button-quiet">Import JSON</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></div>
+        <div id="question-editor-list" class="question-editor-list"></div>
+        <footer class="editor-footer"><span>Each question needs at least two answers with positive whole-number points.</span><button id="save-questions" class="button button-primary">Save questions</button></footer>
+      </section>
+    </div>
+  </section>
+
+  <section id="join-route" class="play-page" hidden>
+    <header class="topbar">
+      <a class="wordmark" href="#" aria-label="Christmas Family Feud home"><span class="wordmark-tree">✳</span> CHRISTMAS <b>FEUD</b></a>
+      <span id="player-connection" class="connection"><i></i> Connecting</span>
+    </header>
+    <main class="play-main">
+      <section id="join-panel" class="join-panel panel">
+        <p class="eyebrow">Player check-in</p><h1>Join the<br><span>holiday feud.</span></h1>
+        <div id="player-reconnecting" class="reconnecting-message player-reconnecting" hidden>Reconnecting…</div>
+        <form id="join-form" class="join-form">
+          <label for="room-input">Room code</label><input id="room-input" name="code" autocomplete="one-time-code" maxlength="5" placeholder="E.G. A7K2P" required>
+          <label for="name-input">Your name</label><input id="name-input" name="name" autocomplete="nickname" maxlength="20" placeholder="Up to 20 characters" required>
+          <button class="button button-primary button-wide" type="submit">Join room <span aria-hidden="true">→</span></button>
+        </form>
+        <div id="join-error" class="message" role="alert" hidden></div>
+        <p id="join-note" class="small-note">Ask your host for the room code. Display names can repeat.</p>
+        <a class="join-back-link" href="#">Back to home</a>
+      </section>
+      <section id="player-view" class="player-view" hidden>
+        <div class="player-topline"><span id="player-room-code" class="eyebrow">ROOM -----</span><button id="leave-room" class="text-link">Leave room</button></div>
+        <div id="player-notice" class="message" role="status" hidden></div>
+        <div id="player-waiting" class="player-waiting panel" hidden>
+          <div class="waiting-star" aria-hidden="true">✳</div><p class="eyebrow">You’re checked in</p><h1 id="waiting-name">Hello!</h1>
+          <p class="waiting-message">Waiting for the host to start</p><div id="waiting-team" class="waiting-team" hidden></div>
+          <div class="player-scoreline"><span>BLUE <b id="waiting-blue">0</b></span><span>RED <b id="waiting-red">0</b></span></div>
+        </div>
+        <div id="player-game" class="player-game panel" hidden>
+          <div class="player-game-top"><div id="team-badge" class="team-badge">BLUE TEAM</div><div class="player-timer"><strong id="player-timer">60</strong><span>SEC</span></div></div>
+          <p id="player-session-label" class="eyebrow">SESSION 1 · QUESTION 1</p>
+          <h1 id="player-question" class="player-question">Name a Christmas food.</h1>
+          <div id="player-turn-status" class="player-turn-status">Your team is active — discuss and submit one answer</div>
+          <div id="player-answer-board" class="player-answer-board"></div>
+          <form id="answer-form" class="answer-form" hidden><label class="visually-hidden" for="answer-input">Team answer</label><input id="answer-input" maxlength="80" placeholder="Your team’s answer" autocomplete="off" required><button class="button button-primary button-wide" type="submit">Submit answer</button></form>
+          <p id="answer-locked" class="answer-locked" hidden>Answer submitted. Your team is locked in.</p>
+          <div id="player-result" class="player-result" hidden></div>
+          <div class="player-scoreline"><span>BLUE <b id="game-blue">0</b></span><span>RED <b id="game-red">0</b></span></div>
+        </div>
+      </section>
+    </main>
+  </section>
 </body>
 </html>

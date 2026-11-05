@@ -288,9 +288,8 @@ function hostSnapshot(room) {
       waiting: !session || !session.playerIds.includes(player.id)
     })),
     questions: room.questions,
-    totals: room.cumulativeScores,
-    cumulativeScores: room.cumulativeScores,
-    sessionScores: room.sessionScores,
+    roundScores: room.roundScores,
+    roundHistory: room.roundHistory,
     typoToleranceEnabled: room.typoToleranceEnabled,
     sessionNumber: room.sessionNumber,
     history: room.history,
@@ -301,13 +300,14 @@ function hostSnapshot(room) {
       questionCount: session.questionCount,
       playerIds: session.playerIds,
       teams: session.teams,
-      scores: room.sessionScores,
+      scores: room.roundScores,
       completedQuestions: session.completedQuestions,
       submissionLog: session.submissionLog,
       question: session.question ? {
         text: session.question.text,
         answers: session.question.answers,
         revealed: session.question.revealed,
+        revealedBy: session.question.revealedBy,
         strikes: session.question.strikes,
         accumulated: session.question.accumulated,
         activeTeam: session.question.activeTeam,
@@ -335,7 +335,8 @@ function playerSnapshot(room, player) {
       text: current.text,
       board: current.answers.map((answer, index) => {
         const revealed = current.revealed.includes(index) || current.status === 'ended';
-        return { revealed, text: revealed ? answer.text : null, points: revealed ? answer.points : null };
+        const revealedBy = revealed ? (current.revealedBy[index] ?? null) : null;
+        return { revealed, text: revealed ? answer.text : null, points: revealed ? answer.points : null, revealedBy };
       }),
       status: current.status,
       activeTeam: current.activeTeam,
@@ -351,15 +352,13 @@ function playerSnapshot(room, player) {
     code: room.code,
     themeId: room.themeId,
     player: { id: player.id, name: player.name, team: player.team, connected: player.connected },
-    totals: room.cumulativeScores,
-    cumulativeScores: room.cumulativeScores,
-    sessionScores: room.sessionScores,
+    roundScores: room.roundScores,
     session: session ? {
       number: session.number,
       status: session.status,
       questionIndex: session.questionIndex,
       questionCount: session.questionCount,
-      scores: room.sessionScores,
+      scores: room.roundScores,
       teams: session.teams,
       message: session.message,
       question
@@ -515,7 +514,7 @@ function finishQuestion(room, awardTeam, result) {
   question.deadline = null;
   question.result = result;
   question.awardedTeam = awardTeam;
-  if (awardTeam) room.sessionScores[awardTeam] += question.accumulated;
+  if (awardTeam) room.roundScores[awardTeam] += question.accumulated;
   session.completedQuestions += 1;
   session.status = 'question-ended';
   session.message = result;
@@ -576,6 +575,8 @@ function awardMatch(room, submission, index, matchType = 'Correct') {
   const answer = question.answers[index];
   recordSubmission(room, submission, matchType, answer.points);
   question.revealed.push(index);
+  // Ownership stays with the team that submitted the answer; earlier reveals keep their original color even if a later steal changes the winner.
+  question.revealedBy[index] = submission.team || question.activeTeam;
   question.accumulated += answer.points;
   question.submission = null;
   if (question.status === 'steal') {
@@ -685,6 +686,7 @@ function initializeQuestion(room, index) {
     text: source.question,
     answers: [...source.answers],
     revealed: [],
+    revealedBy: Array(source.answers.length).fill(null),
     strikes: { blue: 0, red: 0 },
     accumulated: 0,
     activeTeam: startingTeam,
@@ -746,8 +748,8 @@ function createRoom(requestedThemeId) {
     players: new Map(),
     playedPlayerIds: new Set(),
     questions: safeQuestions(theme.defaultQuestions),
-    sessionScores: { blue: 0, red: 0 },
-    cumulativeScores: { blue: 0, red: 0 },
+    roundScores: { blue: 0, red: 0 },
+    roundHistory: [],
     typoToleranceEnabled: true,
     sessionNumber: 0,
     session: null,
@@ -858,7 +860,7 @@ io.on('connection', (socket) => {
       const count = Math.min(10, waiting.length) - (Math.min(10, waiting.length) % 2);
       if (count < 4) fail('At least 4 connected waiting players are needed to start.');
       const selected = waiting.slice(0, count);
-      room.sessionScores = { blue: 0, red: 0 };
+      room.roundScores = { blue: 0, red: 0 };
       const teams = { blue: [], red: [] };
       selected.forEach((player, index) => {
         player.team = index % 2 === 0 ? 'blue' : 'red';
@@ -1004,17 +1006,17 @@ io.on('connection', (socket) => {
           recordSubmission(room, session.question.submission, 'Wrong', 0, 'Session ended before resolution.');
         }
       }
+      const frozenScores = { blue: room.roundScores.blue, red: room.roundScores.red };
       if (session.completedQuestions > 0) {
-        room.cumulativeScores.blue += room.sessionScores.blue;
-        room.cumulativeScores.red += room.sessionScores.red;
+        room.roundHistory.push({
+          roundNumber: session.number,
+          blue: frozenScores.blue,
+          red: frozenScores.red,
+          questionCount: session.completedQuestions,
+          completedAt: new Date().toISOString()
+        });
       }
-      room.history.push({
-        number: session.number,
-        blue: room.sessionScores.blue,
-        red: room.sessionScores.red,
-        questions: session.completedQuestions,
-        submissionLog: session.submissionLog
-      });
+      room.roundScores = { blue: 0, red: 0 };
       for (const id of session.playerIds) {
         const player = room.players.get(id);
         if (player) {
@@ -1022,7 +1024,13 @@ io.on('connection', (socket) => {
           room.playedPlayerIds.add(id);
         }
       }
-      room.sessionScores = { blue: 0, red: 0 };
+      room.history.push({
+        number: session.number,
+        blue: frozenScores.blue,
+        red: frozenScores.red,
+        questions: session.completedQuestions,
+        submissionLog: session.submissionLog
+      });
       room.session = null;
       return {};
     }),
@@ -1063,8 +1071,8 @@ io.on('connection', (socket) => {
       }
       room.players.clear();
       room.playedPlayerIds.clear();
-      room.sessionScores = { blue: 0, red: 0 };
-      room.cumulativeScores = { blue: 0, red: 0 };
+      room.roundScores = { blue: 0, red: 0 };
+      room.roundHistory = [];
       room.sessionNumber = 0;
       room.session = null;
       room.history = [];

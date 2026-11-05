@@ -182,15 +182,16 @@
       $('#room-code').textContent = state.code;
       $('#room-theme-name').textContent = THEMES[themeId].name;
       updateShareLink();
-      $('#blue-total').textContent = state.totals.blue;
-      $('#red-total').textContent = state.totals.red;
-      const sessionScores = state.sessionScores || { blue: 0, red: 0 };
-      $('#session-scoreline').textContent = `Session: Blue ${sessionScores.blue} / Red ${sessionScores.red} · Total: Blue ${state.cumulativeScores?.blue ?? state.totals.blue} / Red ${state.cumulativeScores?.red ?? state.totals.red}`;
+      const roundScores = state.roundScores || { blue: 0, red: 0 };
+      $('#blue-total').textContent = roundScores.blue;
+      $('#red-total').textContent = roundScores.red;
+      const roundNumber = state.session?.number ?? Math.max(0, state.sessionNumber || 0);
+      $('#session-scoreline').textContent = `Round ${roundNumber} — Blue ${roundScores.blue} / Red ${roundScores.red}`;
       $('#typo-toggle').textContent = `Typo tolerance: ${state.typoToleranceEnabled ? 'ON' : 'OFF'}`;
       $('#typo-toggle').setAttribute('aria-pressed', String(state.typoToleranceEnabled));
       $('#player-count').textContent = `${state.players.length} ${state.players.length === 1 ? 'player' : 'players'}`;
       $('#players-heading-count').textContent = state.players.length;
-      $('#session-label').textContent = state.session ? `SESSION ${state.session.number} · ${state.session.status.replaceAll('-', ' ').toUpperCase()}` : 'NO SESSION';
+      $('#session-label').textContent = state.session ? `ROUND ${state.session.number}` : 'NO ROUND';
       $('#host-leave').disabled = Boolean(state.session);
       $('#host-leave').hidden = false;
       $('#host-leave').title = state.session ? 'End the active session before leaving' : '';
@@ -238,7 +239,7 @@
       $('#board-view').hidden = !question;
       $('#final-score').hidden = session?.status !== 'complete';
       if (session?.status === 'complete') {
-        $('#final-copy').textContent = `Session ${session.number} finished ${session.scores.blue}–${session.scores.red}. Bank the session points to update the cumulative board.`;
+        $('#final-copy').textContent = `Round ${session.number} finished ${session.scores.blue}–${session.scores.red}.`;
       }
       if (!question) {
         if (timerInterval) clearInterval(timerInterval);
@@ -254,7 +255,10 @@
       $('#question-points').textContent = question.accumulated;
       $('#answer-board').innerHTML = question.answers.map((answer, index) => {
         const revealed = question.revealed.includes(index) || question.status === 'ended';
-        return `<div class="answer-tile ${revealed ? 'revealed' : ''}"><span class="answer-index">${String(index + 1).padStart(2, '0')}</span>${revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`;
+        const owner = revealed ? (question.revealedBy?.[index] ?? null) : null;
+        const ownerClass = owner === 'blue' ? 'blue' : owner === 'red' ? 'red' : 'unmatched';
+        const classes = revealed ? `answer-tile revealed ${ownerClass}` : 'answer-tile';
+        return `<div class="${classes}"><span class="answer-index">${String(index + 1).padStart(2, '0')}</span>${revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`;
       }).join('');
       ['blue', 'red'].forEach((team) => {
         const element = $(`#${team}-strikes`);
@@ -346,10 +350,17 @@
     }
 
     function renderHistory() {
+      const pastRounds = current.roundHistory || [];
+      const historyPanel = $('#round-history-panel');
+      const historyContent = $('#round-history');
+      historyPanel.hidden = !pastRounds.length;
+      historyContent.innerHTML = pastRounds.length
+        ? pastRounds.map((round) => `<div class="round-history-item">Round ${round.roundNumber} — Blue ${round.blue} / Red ${round.red} (${round.questionCount} question${round.questionCount === 1 ? '' : 's'})</div>`).join('')
+        : '';
       if (!current.session && current.history.length) {
         const latest = current.history[current.history.length - 1];
         $('#final-score').hidden = false;
-        $('#final-copy').textContent = `Session ${latest.number}: ${latest.blue}–${latest.red}. Cumulative score: Blue ${current.totals.blue}, Red ${current.totals.red}.`;
+        $('#final-copy').textContent = `Round ${latest.number} finished ${latest.blue}–${latest.red}.`;
       } else if (!current.session) {
         $('#final-score').hidden = true;
       }
@@ -512,7 +523,7 @@
     $('#start-session').addEventListener('click', () => act('startSession'));
     $('#start-question').addEventListener('click', () => act('startQuestion'));
     $('#end-session').addEventListener('click', () => {
-      if (confirm('End this session and add completed-question points to the cumulative score? An unfinished question will not count.')) act('endSession');
+      if (confirm('End the round now? The current round score will be frozen to round history and reset to 0–0.')) act('endSession');
     });
     $('#reset-room').addEventListener('click', () => {
       if (confirm('Reset the room? This clears players and all scores but keeps the question bank and theme.')) act('resetRoom');
@@ -607,18 +618,81 @@
         showMessage('Question bank saved.', $('#editor-message'));
       } catch (error) { showMessage(error.message, $('#editor-message')); }
     });
-    $('#export-questions').addEventListener('click', () => {
-      const canonicalQuestions = current.questions.map((item) => ({
+    function canonicalQuestionExport(questions = editorQuestions) {
+      return questions.map((item) => ({
         text: item.question,
         answers: item.answers.map((answer) => ({ text: answer.text, points: answer.points }))
       }));
-      const file = new Blob([JSON.stringify(canonicalQuestions, null, 2)], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(file);
-      const themeSlug = THEMES[getTheme(current.themeId).id].title.toLowerCase().replaceAll(' ', '-');
-      link.download = `${themeSlug}-${current.code}-questions.json`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+    function setExportMessage(text, error = false) {
+      const target = $('#export-error');
+      target.textContent = text;
+      target.hidden = !text;
+      target.classList.toggle('is-error', error);
+    }
+    function openExportModal() {
+      try {
+        const questions = editorQuestions.length ? editorQuestions : current.questions;
+        const payload = canonicalQuestionExport(questions);
+        const textarea = $('#export-json');
+        textarea.value = JSON.stringify(payload, null, 2);
+        textarea.focus();
+        textarea.select();
+        setExportMessage('');
+        $('#export-modal').hidden = false;
+      } catch (error) {
+        setExportMessage(error.message || 'Could not prepare the export.', true);
+        $('#export-modal').hidden = false;
+      }
+    }
+    $('#export-questions').addEventListener('click', () => {
+      try {
+        openExportModal();
+      } catch (error) {
+        showMessage(error.message, $('#editor-message'));
+      }
+    });
+    $('#close-export').addEventListener('click', () => $('#export-modal').hidden = true);
+    $('#close-export-inline').addEventListener('click', () => $('#export-modal').hidden = true);
+    $('[data-close-export]').addEventListener('click', () => $('#export-modal').hidden = true);
+    $('#copy-export').addEventListener('click', async () => {
+      const text = $('#export-json').value;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          $('#export-json').focus();
+          $('#export-json').select();
+          const success = document.execCommand('copy');
+          if (!success) throw new Error('copy failed');
+        }
+        setExportMessage('Copied!');
+        window.setTimeout(() => setExportMessage(''), 2000);
+      } catch (error) {
+        $('#export-json').focus();
+        $('#export-json').select();
+        setExportMessage('Press Ctrl/Cmd+C to copy.', true);
+      }
+    });
+    $('#download-export').addEventListener('click', () => {
+      try {
+        const payload = $('#export-json').value;
+        const file = new Blob([payload], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(file);
+        const themeId = getTheme(current.themeId).id;
+        const themeTitle = THEMES[themeId].title || 'family-feud';
+        const cleanTitle = themeTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'family-feud';
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        link.download = `${cleanTitle}-questions-${dateStamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        setExportMessage('');
+      } catch (error) {
+        setExportMessage(error.message || 'Download failed.', true);
+      }
     });
     $('#import-questions').addEventListener('click', () => $('#import-file').click());
     $('#import-file').addEventListener('change', async (event) => {
@@ -691,10 +765,11 @@
       $('#player-view').hidden = false;
       $('#player-room-code').textContent = `ROOM ${current.code}`;
       $('#waiting-name').textContent = `Hi, ${current.player.name}.`;
-      $('#waiting-blue').textContent = current.totals.blue;
-      $('#waiting-red').textContent = current.totals.red;
-      $('#game-blue').textContent = current.totals.blue;
-      $('#game-red').textContent = current.totals.red;
+      const roundScores = current.roundScores || { blue: 0, red: 0 };
+      $('#waiting-blue').textContent = roundScores.blue;
+      $('#waiting-red').textContent = roundScores.red;
+      $('#game-blue').textContent = roundScores.blue;
+      $('#game-red').textContent = roundScores.red;
 
       const question = current.session?.question;
       const assigned = Boolean(current.player.team);
@@ -721,7 +796,7 @@
 
       $('#team-badge').className = `team-badge ${current.player.team}`;
       $('#team-badge').textContent = `${current.player.team.toUpperCase()} TEAM`;
-      $('#player-session-label').textContent = `SESSION ${current.session.number} · QUESTION ${current.session.questionIndex + 1} OF ${current.session.questionCount}`;
+      $('#player-session-label').textContent = `Round ${current.session.number} — Blue ${roundScores.blue} / Red ${roundScores.red}`;
       $('#player-question').textContent = question.text;
       const isActive = question.activeTeam === current.player.team && ['playing', 'steal'].includes(question.status);
       const hasSubmission = question.submissionReceived;
@@ -739,7 +814,12 @@
         status.textContent = question.status === 'steal' ? 'The other team is making its steal attempt.' : `${question.activeTeam.toUpperCase()} team is answering. Discuss together.`;
         status.classList.add('inactive');
       }
-      $('#player-answer-board').innerHTML = question.board.map((answer, index) => `<div class="answer-tile ${answer.revealed ? 'revealed' : ''}"><span class="answer-index">${String(index + 1).padStart(2, '0')}</span>${answer.revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`).join('');
+      $('#player-answer-board').innerHTML = question.board.map((answer, index) => {
+        const owner = answer.revealedBy || null;
+        const ownerClass = owner === 'blue' ? 'blue' : owner === 'red' ? 'red' : 'unmatched';
+        const classes = answer.revealed ? `answer-tile revealed ${ownerClass}` : 'answer-tile';
+        return `<div class="${classes}"><span class="answer-index">${String(index + 1).padStart(2, '0')}</span>${answer.revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`;
+      }).join('');
       const canSubmit = isActive && !hasSubmission;
       $('#answer-form').hidden = !canSubmit;
       $('#answer-locked').hidden = !(isActive && hasSubmission && question.status !== 'ended');

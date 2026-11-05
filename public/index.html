@@ -72,11 +72,16 @@
           <div class="room-banner-note"><span class="live-dot"></span><span><b id="player-count">0 players</b><br>in the room</span></div>
         </section>
 
-        <section class="score-strip" aria-label="Session and cumulative team scores">
-          <div class="score-team score-blue"><span class="team-label">BLUE</span><strong id="blue-total">0</strong><small>cumulative points</small></div>
-          <div class="score-center"><span class="score-divider">✳</span><span id="session-label">NO SESSION</span></div>
-          <div class="score-team score-red"><span class="team-label">RED</span><strong id="red-total">0</strong><small>cumulative points</small></div>
-          <div id="session-scoreline" class="session-scoreline">Session: Blue 0 / Red 0 · Total: Blue 0 / Red 0</div>
+        <section class="score-strip" aria-label="Current round team scores">
+          <div class="score-team score-blue"><span class="team-label">BLUE</span><strong id="blue-total">0</strong><small>round points</small></div>
+          <div class="score-center"><span class="score-divider">✳</span><span id="session-label">NO ROUND</span></div>
+          <div class="score-team score-red"><span class="team-label">RED</span><strong id="red-total">0</strong><small>round points</small></div>
+          <div id="session-scoreline" class="session-scoreline">Round 0 — Blue 0 / Red 0</div>
+        </section>
+
+        <section id="round-history-panel" class="panel round-history-panel" hidden>
+          <div class="section-heading"><div><p class="eyebrow">Review</p><h2>Round history</h2></div></div>
+          <div id="round-history" class="round-history"></div>
         </section>
 
         <div id="message" class="message" role="status" hidden></div>
@@ -90,7 +95,7 @@
                 <button id="start-question" class="button button-dark button-wide" hidden>Start first question</button>
                 <button id="question-editor-open" class="button button-outline button-wide">Question editor</button>
                 <button id="remove-all-played" class="button button-outline button-wide" hidden>Remove all played players</button>
-                <button id="end-session" class="button button-outline button-wide" hidden>End session &amp; bank points</button>
+                <button id="end-session" class="button button-outline button-wide" type="button" hidden>End round</button>
                 <button id="reset-room" class="button button-quiet button-wide">Reset room</button>
               </div>
               <div class="host-settings">
@@ -114,7 +119,15 @@
                 <div id="active-team" class="active-team"><span class="active-team-dot"></span><span>BLUE TEAM</span></div>
                 <div class="timer-wrap"><span class="timer-caption">TIME</span><strong id="timer">60</strong><small>sec</small></div>
               </div>
-              <div class="question-scoreline"><span>QUESTION POINTS</span><strong id="question-points">0</strong></div>
+              <div class="question-scoreline"><span>QUESTION POT</span><strong id="question-points">0</strong></div>
+              <details class="answer-legend" open>
+                <summary>Answer colors</summary>
+                <div class="legend-items">
+                  <span class="legend-item"><span class="legend-dot blue"></span>Blue said</span>
+                  <span class="legend-item"><span class="legend-dot red"></span>Red said</span>
+                  <span class="legend-item"><span class="legend-dot unmatched"></span>Unclaimed</span>
+                </div>
+              </details>
               <div id="answer-board" class="answer-board"></div>
               <div class="strike-line"><span class="eyebrow">STRIKES</span><div><span id="blue-strikes" class="strike-team"><b>BLUE</b><i>○ ○ ○</i></span><span id="red-strikes" class="strike-team"><b>RED</b><i>○ ○ ○</i></span></div></div>
               <div id="submission-box" class="submission-box" hidden>
@@ -123,18 +136,18 @@
               </div>
               <div id="match-confirmation" class="match-confirmation" hidden>
                 <p id="match-confirmation-copy"></p>
-                <div><button id="accept-match" class="button button-primary">Accept</button><button id="reject-match" class="button button-outline">Reject</button></div>
+                <div><button id="accept-match" class="button button-primary" type="button">Accept</button><button id="reject-match" class="button button-outline" type="button">Reject</button></div>
               </div>
               <div id="host-override" class="host-override">
                 <label for="override-answer">Host answer / override</label>
-                <div class="override-row"><input id="override-answer" maxlength="80" placeholder="Type what the team said"><button id="resolve-answer" class="button button-red">Resolve answer</button></div>
+                <div class="override-row"><input id="override-answer" maxlength="80" placeholder="Type what the team said"><button id="resolve-answer" class="button button-red" type="button">Resolve answer</button></div>
               </div>
               <div id="round-result" class="round-result" hidden></div>
               <div class="board-controls">
-                <button id="add-strike" class="button button-outline">Add strike</button>
-                <button id="pass-control" class="button button-outline">Pass control / steal</button>
-                <button id="skip-timer" class="button button-outline">Skip timer</button>
-                <button id="next-question" class="button button-primary" hidden>Next question →</button>
+                <button id="add-strike" class="button button-outline" type="button">Add strike</button>
+                <button id="pass-control" class="button button-outline" type="button">Pass control / steal</button>
+                <button id="skip-timer" class="button button-outline" type="button">Skip timer</button>
+                <button id="next-question" class="button button-primary" type="button" hidden>Next question →</button>
               </div>
             </div>
           </section>
@@ -153,16 +166,25 @@
     <div id="editor-modal" class="modal" hidden>
       <div class="modal-backdrop" data-close-editor></div>
       <section class="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-title">
-        <header class="editor-header"><div><p class="eyebrow"><span data-theme-title>Family Feud</span> · Room question bank</p><h2 id="editor-title">Question editor</h2></div><button id="editor-close" class="icon-button" aria-label="Close question editor">×</button></header>
+        <header class="editor-header"><div><p class="eyebrow"><span data-theme-title>Family Feud</span> · Room question bank</p><h2 id="editor-title">Question editor</h2></div><button id="editor-close" class="icon-button" type="button" aria-label="Close question editor">×</button></header>
         <div id="editor-message" class="message" role="status" hidden></div>
         <div class="editor-toolbar">
-          <button id="add-question" class="button button-outline">＋ Add question</button>
-          <div><button id="export-questions" class="button button-quiet">Export JSON</button><button id="import-questions" class="button button-quiet">Import file</button><input id="import-file" type="file" accept="application/json,.json" hidden></div>
-          <details class="json-paste"><summary>Import pasted JSON</summary><textarea id="import-text" rows="5" placeholder='[{"text":"Name a pizza topping.","answers":[{"text":"Pepperoni","points":30}]}]'></textarea><button id="import-pasted" class="button button-outline">Import pasted JSON</button></details>
+          <button id="add-question" class="button button-outline" type="button">＋ Add question</button>
+          <div><button id="export-questions" class="button button-quiet" type="button">Export JSON</button><button id="import-questions" class="button button-quiet" type="button">Import file</button><input id="import-file" type="file" accept="application/json,.json" hidden></div>
+          <details class="json-paste"><summary>Import pasted JSON</summary><textarea id="import-text" rows="5" placeholder='[{"text":"Name a pizza topping.","answers":[{"text":"Pepperoni","points":30}]}]'></textarea><button id="import-pasted" class="button button-outline" type="button">Import pasted JSON</button></details>
         </div>
         <div id="question-editor-list" class="question-editor-list"></div>
-        <footer class="editor-footer"><span>Each question needs at least two answers with positive whole-number points.</span><button id="save-questions" class="button button-primary">Save questions</button></footer>
+        <footer class="editor-footer"><span>Each question needs at least two answers with positive whole-number points.</span><button id="save-questions" class="button button-primary" type="button">Save questions</button></footer>
       </section>
+      <div id="export-modal" class="export-modal" hidden>
+        <div class="modal-backdrop" data-close-export></div>
+        <section class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title">
+          <header class="editor-header"><div><p class="eyebrow"><span data-theme-title>Family Feud</span> · Export</p><h2 id="export-title">Question JSON</h2></div><button id="close-export" class="icon-button" type="button" aria-label="Close export preview">×</button></header>
+          <div id="export-error" class="message" role="alert" hidden></div>
+          <div class="export-body"><textarea id="export-json" readonly spellcheck="false"></textarea></div>
+          <div class="export-actions"><button id="copy-export" class="button button-primary" type="button">Copy</button><button id="download-export" class="button button-outline" type="button">Download .json</button><button id="close-export-inline" class="button button-quiet" type="button">Close</button></div>
+        </section>
+      </div>
     </div>
   </section>
 

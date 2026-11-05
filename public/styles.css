@@ -110,6 +110,7 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0; }
 .score-red .team-label, .score-red strong { color: var(--red); }
 .score-center { display: flex; min-width: 135px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-right: 1px solid var(--line); border-left: 1px solid var(--line); color: var(--muted); font-size: .58rem; font-weight: 900; letter-spacing: .1em; }
 .score-divider { color: #c29b37; font-size: 1.1rem; }
+.session-scoreline { grid-column: 1 / -1; padding: 8px 12px; border-top: 1px solid var(--line); color: var(--pine); font-size: .76rem; font-weight: 900; text-align: center; }
 .message { margin: 0 0 14px; padding: 10px 13px; border: 1px solid #e8c0b9; border-radius: 4px; background: #fff0ed; color: #872d27; font-size: .83rem; line-height: 1.45; }
 .host-columns { display: grid; grid-template-columns: minmax(245px, 310px) minmax(0, 1fr); align-items: start; gap: 16px; }
 .panel { border: 1px solid var(--line); border-radius: 6px; background: var(--paper); box-shadow: 0 4px 15px rgba(20,52,38,.035); }
@@ -132,6 +133,8 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0; }
 .empty-players { padding: 18px 5px; color: var(--muted); font-size: .82rem; text-align: center; }
 .sidebar-actions { display: grid; gap: 8px; margin-top: 14px; }
 .sidebar-actions .button { min-height: 40px; }
+.host-settings { margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--line); }
+.host-settings .eyebrow { margin-bottom: 8px; }
 .game-area { min-width: 0; }
 .ready-view { position: relative; min-height: 400px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; overflow: hidden; padding: clamp(24px, 6vw, 55px); }
 .ready-view h2, .final-score h2 { margin-bottom: 12px; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.02; }
@@ -174,6 +177,10 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0; }
 .submission-box .eyebrow { margin: 0; }
 .submission-box strong { font-family: Georgia, serif; font-size: 1.15rem; }
 .submission-box small { color: var(--muted); font-size: .68rem; }
+.match-confirmation { margin-top: 12px; padding: 13px; border: 1px solid #ecd59a; border-radius: 4px; background: #fff8df; }
+.match-confirmation p { margin: 0 0 10px; color: #55471e; font-size: .85rem; font-weight: 800; line-height: 1.5; }
+.match-confirmation > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.match-confirmation .button { min-height: 36px; }
 .host-override { margin-top: 13px; }
 .host-override label { display: block; margin-bottom: 6px; color: var(--muted); font-size: .7rem; font-weight: 800; }
 .override-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
@@ -185,15 +192,38 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .board-controls .button { min-height: 38px; font-size: .75rem; }
 .final-score { margin-top: 16px; padding: 25px; }
 .final-score p:last-child { margin-bottom: 0; color: var(--muted); }
+.summary-submission-log { margin-top: 18px; }
+.summary-submission-log h3 { margin: 0 0 8px; color: var(--pine); font-size: .95rem; }
+.summary-log-scroll { max-height: 360px; overflow-y: auto; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: white; }
+.submission-log-panel { margin-top: 16px; padding: 18px; }
+.submission-log-panel .section-heading h2 { margin-bottom: 0; }
+.submission-log { display: grid; gap: 7px; max-height: 540px; overflow-y: auto; }
+.session-log-group, .question-log { border: 1px solid var(--line); border-radius: 4px; background: white; }
+.session-log-group { padding: 9px 11px; }
+.question-log { margin-top: 7px; padding: 8px 10px; background: #f8faf6; }
+.session-log-group > summary, .question-log > summary { color: var(--pine); cursor: pointer; font-size: .8rem; font-weight: 900; }
+.question-log > summary { font-size: .75rem; }
+.question-log-entries { display: grid; gap: 6px; margin-top: 8px; }
+.submission-log-entry { display: grid; grid-template-columns: minmax(110px, auto) auto minmax(75px, auto) minmax(90px, 1fr) auto; align-items: center; gap: 7px; padding: 7px; border: 1px solid #e4ebe4; border-radius: 4px; background: white; font-size: .7rem; }
+.submission-log-entry time, .submission-log-entry small { color: var(--muted); font-size: .65rem; }
+.submission-log-entry strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-raw { overflow-wrap: anywhere; }
+.log-result { color: var(--pine); font-weight: 900; }
+.submission-log-entry small { grid-column: 1 / -1; }
+.empty-log { margin: 8px 0 0; color: var(--muted); font-size: .78rem; }
 
 .modal { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 18px; }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(9,29,20,.62); }
 .editor-dialog { position: relative; display: flex; width: min(920px, 100%); max-height: min(92vh, 930px); flex-direction: column; overflow: hidden; border-radius: 7px; background: var(--paper); box-shadow: 0 25px 80px rgba(0,0,0,.24); }
 .editor-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 13px; border-bottom: 1px solid var(--line); }
 .editor-header h2 { margin: 0; font-size: 1.8rem; }
-.editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 22px; border-bottom: 1px solid var(--line); }
+.editor-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 22px; border-bottom: 1px solid var(--line); }
 .editor-toolbar > div { display: flex; gap: 3px; }
+.json-paste { flex: 1 1 100%; color: var(--muted); font-size: .75rem; }
+.json-paste summary { width: fit-content; cursor: pointer; font-weight: 800; }
+.json-paste textarea { display: block; width: 100%; margin: 8px 0; padding: 8px; border: 1px solid #cbd9ce; border-radius: 4px; font: .75rem/1.45 monospace; resize: vertical; }
 .question-editor-list { flex: 1; overflow-y: auto; padding: 14px 22px; }
+.empty-editor { padding: 22px; color: var(--muted); font-size: .85rem; text-align: center; }
 .question-card { margin-bottom: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 5px; background: white; }
 .question-card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
 .question-card-head .question-field { flex: 1; }
@@ -261,6 +291,8 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
   .score-team { padding: 10px 12px; }
   .score-center { min-width: 90px; }
   .score-team strong { font-size: 1.8rem; }
+  .submission-log-entry { grid-template-columns: auto auto minmax(70px, 1fr); }
+  .submission-log-entry time, .submission-log-entry .log-raw, .submission-log-entry .log-result, .submission-log-entry small { grid-column: 1 / -1; }
 }
 @media (max-width: 520px) {
   .topbar { height: 54px; }
@@ -281,6 +313,8 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
   .score-team strong { grid-column: auto; grid-row: auto; justify-self: center; font-size: 1.65rem; }
   .score-team small { grid-column: auto; font-size: .56rem; }
   .score-center { min-width: 72px; font-size: .48rem; }
+  .session-scoreline { font-size: .66rem; }
+  .submission-log-panel, .final-score { padding: 14px; }
   .answer-board { grid-template-columns: 1fr; }
   .answer-tile { min-height: 41px; }
   .strike-line { align-items: flex-start; flex-direction: column; }

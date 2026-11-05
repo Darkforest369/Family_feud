@@ -66,10 +66,11 @@
           <div class="room-banner-note"><span class="live-dot"></span><span><b id="player-count">0 players</b><br>in the room</span></div>
         </section>
 
-        <section class="score-strip" aria-label="Cumulative team scores">
+        <section class="score-strip" aria-label="Session and cumulative team scores">
           <div class="score-team score-blue"><span class="team-label">BLUE</span><strong id="blue-total">0</strong><small>cumulative points</small></div>
           <div class="score-center"><span class="score-divider">✳</span><span id="session-label">NO SESSION</span></div>
           <div class="score-team score-red"><span class="team-label">RED</span><strong id="red-total">0</strong><small>cumulative points</small></div>
+          <div id="session-scoreline" class="session-scoreline">Session: Blue 0 / Red 0 · Total: Blue 0 / Red 0</div>
         </section>
 
         <div id="message" class="message" role="status" hidden></div>
@@ -85,6 +86,10 @@
                 <button id="remove-all-played" class="button button-outline button-wide" hidden>Remove all played players</button>
                 <button id="end-session" class="button button-outline button-wide" hidden>End session &amp; bank points</button>
                 <button id="reset-room" class="button button-quiet button-wide">Reset room</button>
+              </div>
+              <div class="host-settings">
+                <p class="eyebrow">Host settings</p>
+                <button id="typo-toggle" class="button button-outline button-wide" aria-pressed="true">Typo tolerance: ON</button>
               </div>
               <p class="small-note">Up to 10 connected players per session. Remove a finished group before inviting the next.</p>
             </section>
@@ -110,6 +115,10 @@
                 <div><span class="eyebrow">TEAM SUBMISSION</span><strong id="submitted-answer">—</strong><small id="submitted-by"></small></div>
                 <button id="clear-submission" class="icon-button" title="Clear current submission" aria-label="Clear current submission">×</button>
               </div>
+              <div id="match-confirmation" class="match-confirmation" hidden>
+                <p id="match-confirmation-copy"></p>
+                <div><button id="accept-match" class="button button-primary">Accept</button><button id="reject-match" class="button button-outline">Reject</button></div>
+              </div>
               <div id="host-override" class="host-override">
                 <label for="override-answer">Host answer / override</label>
                 <div class="override-row"><input id="override-answer" maxlength="80" placeholder="Type what the team said"><button id="resolve-answer" class="button button-red">Resolve answer</button></div>
@@ -127,6 +136,11 @@
         <section id="final-score" class="final-score panel" hidden>
           <p class="eyebrow">Session complete</p><h2>That’s a wrap.</h2>
           <p id="final-copy"></p>
+          <div id="summary-submission-log" class="summary-submission-log" aria-label="Session submission log"></div>
+        </section>
+        <section id="submission-log-panel" class="submission-log-panel panel" hidden>
+          <div class="section-heading"><div><p class="eyebrow">Host only</p><h2>Submission log</h2></div></div>
+          <div id="submission-log" class="submission-log"></div>
         </section>
       </div>
     </main>
@@ -135,7 +149,11 @@
       <section class="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-title">
         <header class="editor-header"><div><p class="eyebrow">Room question bank</p><h2 id="editor-title">Question editor</h2></div><button id="editor-close" class="icon-button" aria-label="Close question editor">×</button></header>
         <div id="editor-message" class="message" role="status" hidden></div>
-        <div class="editor-toolbar"><button id="add-question" class="button button-outline">＋ Add question</button><div><button id="export-questions" class="button button-quiet">Export JSON</button><button id="import-questions" class="button button-quiet">Import JSON</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></div>
+        <div class="editor-toolbar">
+          <button id="add-question" class="button button-outline">＋ Add question</button>
+          <div><button id="export-questions" class="button button-quiet">Export JSON</button><button id="import-questions" class="button button-quiet">Import file</button><input id="import-file" type="file" accept="application/json,.json" hidden></div>
+          <details class="json-paste"><summary>Import pasted JSON</summary><textarea id="import-text" rows="5" placeholder='[{"text":"Name a Christmas food.","answers":[{"text":"Turkey","points":30}]}]'></textarea><button id="import-pasted" class="button button-outline">Import pasted JSON</button></details>
+        </div>
         <div id="question-editor-list" class="question-editor-list"></div>
         <footer class="editor-footer"><span>Each question needs at least two answers with positive whole-number points.</span><button id="save-questions" class="button button-primary">Save questions</button></footer>
       </section>

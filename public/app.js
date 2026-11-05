@@ -113,6 +113,10 @@
       updateShareLink();
       $('#blue-total').textContent = state.totals.blue;
       $('#red-total').textContent = state.totals.red;
+      const sessionScores = state.sessionScores || { blue: 0, red: 0 };
+      $('#session-scoreline').textContent = `Session: Blue ${sessionScores.blue} / Red ${sessionScores.red} · Total: Blue ${state.cumulativeScores?.blue ?? state.totals.blue} / Red ${state.cumulativeScores?.red ?? state.totals.red}`;
+      $('#typo-toggle').textContent = `Typo tolerance: ${state.typoToleranceEnabled ? 'ON' : 'OFF'}`;
+      $('#typo-toggle').setAttribute('aria-pressed', String(state.typoToleranceEnabled));
       $('#player-count').textContent = `${state.players.length} ${state.players.length === 1 ? 'player' : 'players'}`;
       $('#players-heading-count').textContent = state.players.length;
       $('#session-label').textContent = state.session ? `SESSION ${state.session.number} · ${state.session.status.replaceAll('-', ' ').toUpperCase()}` : 'NO SESSION';
@@ -122,6 +126,7 @@
       renderPlayers();
       renderSession();
       renderHistory();
+      renderSubmissionLog();
       renderRoute();
     }
 
@@ -190,19 +195,80 @@
         $('#submitted-answer').textContent = question.submission.text;
         $('#submitted-by').textContent = `Submitted by ${question.submission.playerName}`;
       }
-      $('#host-override').hidden = !activeGame;
-      $('#resolve-answer').disabled = !activeGame || (!question.submission && !$('#override-answer').value.trim());
+      const pendingMatch = question.pendingMatch;
+      $('#match-confirmation').hidden = !pendingMatch;
+      if (pendingMatch) {
+        const answer = question.answers[pendingMatch.index];
+        $('#match-confirmation-copy').textContent =
+          `${question.activeTeam.toUpperCase()} submitted '${pendingMatch.submission.text}' → did you mean '${answer.text}'? ${pendingMatch.type} · auto-reject in ${Math.max(0, Math.ceil((pendingMatch.deadline - Date.now()) / 1000))}s`;
+      }
+      $('#host-override').hidden = !activeGame || Boolean(pendingMatch);
+      $('#resolve-answer').disabled = !activeGame || Boolean(pendingMatch) || (!question.submission && !$('#override-answer').value.trim());
       $('#add-strike').hidden = !activeGame || question.status === 'steal';
       $('#pass-control').hidden = !activeGame || question.status === 'steal';
       $('#skip-timer').hidden = !activeGame;
       $('#next-question').hidden = question.status !== 'ended';
       $('#round-result').hidden = !question.result;
       $('#round-result').textContent = question.result || '';
-      countdown(question.deadline, $('#timer'));
+      countdown(pendingMatch?.deadline || question.deadline, $('#timer'));
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(() => {
-        if (current?.session?.question?.deadline) countdown(current.session.question.deadline, $('#timer'));
+        const liveQuestion = current?.session?.question;
+        if (liveQuestion?.pendingMatch) countdown(liveQuestion.pendingMatch.deadline, $('#timer'));
+        else if (liveQuestion?.deadline) countdown(liveQuestion.deadline, $('#timer'));
       }, 250);
+    }
+
+    function renderLogGroups(sessions, openLatest = false) {
+      if (!sessions.length) return '<p class="empty-log">No submissions yet.</p>';
+      return sessions.map((item, sessionIndex) => {
+        const groups = item.log || [];
+        const questions = groups.map((group, groupIndex) => {
+          const entries = group.entries.map((entry) => `
+            <div class="submission-log-entry">
+              <time>${escape(new Date(entry.timestamp).toLocaleString())}</time>
+              <span class="team-mini ${escape(entry.team)}">${escape(entry.team.toUpperCase())}</span>
+              <strong>${escape(entry.playerName)}</strong>
+              <span class="log-raw">${escape(entry.rawInput || '(no answer)')}</span>
+              <span class="log-result">${escape(entry.result)}${entry.points ? ` · +${entry.points} pts` : ''}</span>
+              ${entry.note ? `<small>${escape(entry.note)}</small>` : ''}
+            </div>`).join('');
+          const questionOpen = openLatest && sessionIndex === sessions.length - 1 && groupIndex === groups.length - 1;
+          return `<details class="question-log" ${questionOpen ? 'open' : ''}>
+            <summary>Show question ${group.questionNumber}: ${escape(group.questionText)}</summary>
+            <div class="question-log-entries">${entries || '<p class="empty-log">No submissions yet.</p>'}</div>
+          </details>`;
+        }).join('');
+        const isCurrentSession = item.current;
+        const sessionOpen = openLatest && isCurrentSession;
+        return `<details class="session-log-group" ${sessionOpen ? 'open' : ''}>
+          <summary>Session ${item.number}${isCurrentSession ? ' · in progress' : ''}</summary>
+          ${questions || '<p class="empty-log">No submissions yet.</p>'}
+        </details>`;
+      }).join('');
+    }
+
+    function renderSubmissionLog() {
+      const historySessions = current.history.map((item) => ({
+        number: item.number,
+        log: item.submissionLog || [],
+        current: false
+      }));
+      const sessions = current.session
+        ? [...historySessions, {
+          number: current.session.number,
+          log: current.session.submissionLog || [],
+          current: true
+        }]
+        : historySessions;
+      $('#submission-log-panel').hidden = !sessions.length;
+      $('#submission-log').innerHTML = renderLogGroups(sessions, Boolean(current.session));
+      const latest = current.session
+        ? (current.session.status === 'complete' ? sessions[sessions.length - 1] : null)
+        : sessions[sessions.length - 1];
+      $('#summary-submission-log').innerHTML = latest
+        ? `<h3>Session ${latest.number} submission log</h3><div class="summary-log-scroll">${renderLogGroups([latest], true)}</div>`
+        : '';
     }
 
     function renderHistory() {
@@ -224,7 +290,7 @@
     }
 
     function renderEditor() {
-      $('#question-editor-list').innerHTML = editorQuestions.map((item, questionIndex) => `
+      $('#question-editor-list').innerHTML = editorQuestions.length ? editorQuestions.map((item, questionIndex) => `
         <article class="question-card" data-question="${questionIndex}">
           <div class="question-card-head">
             <input class="question-field" data-question-field="question" value="${escape(item.question)}" aria-label="Question ${questionIndex + 1}">
@@ -242,10 +308,74 @@
             </div>`).join('')}
           </div>
           <button class="button button-outline add-answer" data-add-answer>＋ Add answer</button>
-        </article>`).join('');
+        </article>`).join('') : '<p class="empty-editor">No questions yet. Add a question or import JSON.</p>';
     }
 
     function closeEditor() { $('#editor-modal').hidden = true; }
+
+    // Canonical question JSON schema: [{ "text": "...", "answers": [{ "text": "...", "points": 30 }] }].
+    function parseImportedQuestions(text) {
+      let parsed;
+      try {
+        parsed = JSON.parse(text.replace(/^\uFEFF/, '').trim());
+      } catch (error) {
+        throw new Error(`Invalid JSON: ${error.message}`);
+      }
+      if (!Array.isArray(parsed)) {
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+            Object.keys(parsed).some((key) => key !== 'questions')) {
+          throw new Error('JSON must be a question array or an object containing only a "questions" array.');
+        }
+        parsed = parsed.questions;
+      }
+      if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 100) {
+        throw new Error('Provide between 1 and 100 questions.');
+      }
+      const imported = parsed.map((item, questionIndex) => {
+        const q = questionIndex + 1;
+        if (!item || typeof item !== 'object' || Array.isArray(item) ||
+            Object.keys(item).some((key) => !['text', 'answers'].includes(key))) {
+          throw new Error(`Question ${q}: use only "text" and "answers" fields.`);
+        }
+        if (typeof item.text !== 'string' || !item.text.trim() || item.text.length > 180) {
+          throw new Error(`Question ${q}: text must be a non-empty string of at most 180 characters.`);
+        }
+        if (!Array.isArray(item.answers) || item.answers.length < 2 || item.answers.length > 12) {
+          throw new Error(`Question ${q}: provide 2 to 12 answers.`);
+        }
+        const seen = new Set();
+        const answers = item.answers.map((answer, answerIndex) => {
+          const a = answerIndex + 1;
+          if (!answer || typeof answer !== 'object' || Array.isArray(answer) ||
+              Object.keys(answer).some((key) => !['text', 'points'].includes(key))) {
+            throw new Error(`Question ${q}, answer ${a}: use only "text" and "points" fields.`);
+          }
+          if (typeof answer.text !== 'string' || !answer.text.trim() || answer.text.length > 80) {
+            throw new Error(`Question ${q}, answer ${a}: text must be a non-empty string of at most 80 characters.`);
+          }
+          if (!Number.isInteger(answer.points) || answer.points < 1 || answer.points > 10000) {
+            const got = typeof answer.points === 'string' ? `'${answer.points}'` : String(answer.points);
+            throw new Error(`Question ${q}, answer ${a}: points must be a positive integer (got ${got}).`);
+          }
+          const normalized = answer.text.toLowerCase().normalize('NFD')
+            .replace(/\p{Diacritic}/gu, '').replace(/[\p{P}\p{S}]/gu, '')
+            .trim().replace(/\s+/g, ' ');
+          if (!normalized) throw new Error(`Question ${q}, answer ${a}: include at least one letter or number.`);
+          if (seen.has(normalized)) throw new Error(`Question ${q}: duplicate answer "${answer.text}".`);
+          seen.add(normalized);
+          return { text: answer.text, points: answer.points };
+        });
+        return { question: item.text, answers };
+      });
+      return imported;
+    }
+
+    async function importQuestionText(text) {
+      const imported = parseImportedQuestions(text);
+      editorQuestions = imported;
+      renderEditor();
+      showMessage('Imported into the editor. Save questions to apply the changes.', $('#editor-message'));
+    }
 
     async function sync() {
       $('#host-reconnecting').hidden = false;
@@ -323,10 +453,15 @@
     $('#remove-all-played').addEventListener('click', () => act('removeAllPlayedPlayers', {}, 'Played players removed.'));
     $('#resolve-answer').addEventListener('click', async () => {
       try {
-        await request('resolveAnswer', { answer: $('#override-answer').value.trim() });
+        await request('resolveAnswer', { answer: $('#override-answer').value });
         $('#override-answer').value = '';
         showMessage('');
       } catch (error) { showMessage(error.message); }
+    });
+    $('#accept-match').addEventListener('click', () => act('decideMatch', { accept: true }));
+    $('#reject-match').addEventListener('click', () => act('decideMatch', { accept: false }));
+    $('#typo-toggle').addEventListener('click', () => {
+      act('setTypoTolerance', { enabled: !current.typoToleranceEnabled });
     });
     $('#override-answer').addEventListener('input', () => {
       const question = current?.session?.question;
@@ -368,7 +503,6 @@
       if (!card) return;
       const index = Number(card.dataset.question);
       if (event.target.closest('[data-delete-question]')) {
-        if (editorQuestions.length === 1) return showMessage('Keep at least one question.', $('#editor-message'));
         editorQuestions.splice(index, 1);
       } else if (event.target.closest('[data-move="up"]') && index > 0) {
         [editorQuestions[index - 1], editorQuestions[index]] = [editorQuestions[index], editorQuestions[index - 1]];
@@ -400,28 +534,30 @@
       } catch (error) { showMessage(error.message, $('#editor-message')); }
     });
     $('#export-questions').addEventListener('click', () => {
-      const file = new Blob([JSON.stringify(current.questions, null, 2)], { type: 'application/json' });
+      const canonicalQuestions = current.questions.map((item) => ({
+        text: item.question,
+        answers: item.answers.map((answer) => ({ text: answer.text, points: answer.points }))
+      }));
+      const file = new Blob([JSON.stringify(canonicalQuestions, null, 2)], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(file);
       link.download = `christmas-feud-${current.code}-questions.json`;
       link.click();
-      URL.revokeObjectURL(link.href);
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     });
     $('#import-questions').addEventListener('click', () => $('#import-file').click());
     $('#import-file').addEventListener('change', async (event) => {
       const file = event.target.files[0];
       if (!file) return;
       try {
-        const parsed = JSON.parse(await file.text());
-        editorQuestions = Array.isArray(parsed) ? parsed : parsed.questions;
-        if (!Array.isArray(editorQuestions)) throw new Error('JSON must contain a question array.');
-        if (editorQuestions.some((item) => !item || typeof item.question !== 'string' || !Array.isArray(item.answers))) {
-          throw new Error('Each question needs text and an answers array.');
-        }
-        renderEditor();
-        showMessage('Imported into the editor. Save questions to apply the changes.', $('#editor-message'));
+        await importQuestionText(await file.text());
       } catch (error) { showMessage(`Could not import JSON: ${error.message}`, $('#editor-message')); }
       event.target.value = '';
+    });
+    $('#import-pasted').addEventListener('click', async () => {
+      try {
+        await importQuestionText($('#import-text').value);
+      } catch (error) { showMessage(`Could not import JSON: ${error.message}`, $('#editor-message')); }
     });
     socket.on('hostState', render);
 
@@ -567,7 +703,7 @@
     });
     $('#answer-form').addEventListener('submit', (event) => {
       event.preventDefault();
-      const answer = $('#answer-input').value.trim();
+      const answer = $('#answer-input').value;
       if (!answer) return;
       const button = $('#answer-form button');
       button.disabled = true;

@@ -147,7 +147,10 @@ function hostSnapshot(room) {
       waiting: !session || !session.playerIds.includes(player.id)
     })),
     questions: room.questions,
-    totals: room.totals,
+    totals: room.cumulativeScores,
+    cumulativeScores: room.cumulativeScores,
+    sessionScores: room.sessionScores,
+    typoToleranceEnabled: room.typoToleranceEnabled,
     sessionNumber: room.sessionNumber,
     history: room.history,
     session: session ? {
@@ -157,8 +160,9 @@ function hostSnapshot(room) {
       questionCount: session.questionCount,
       playerIds: session.playerIds,
       teams: session.teams,
-      scores: session.scores,
+      scores: room.sessionScores,
       completedQuestions: session.completedQuestions,
+      submissionLog: session.submissionLog,
       question: session.question ? {
         text: session.question.text,
         answers: session.question.answers,
@@ -168,6 +172,7 @@ function hostSnapshot(room) {
         activeTeam: session.question.activeTeam,
         status: session.question.status,
         submission: session.question.submission,
+        pendingMatch: session.question.pendingMatch,
         deadline: session.question.deadline,
         turn: session.question.turn,
         result: session.question.result,
@@ -196,7 +201,7 @@ function playerSnapshot(room, player) {
       strikes: current.strikes,
       accumulated: current.accumulated,
       deadline: current.deadline,
-      submissionReceived: Boolean(current.submission),
+      submissionReceived: Boolean(current.submission || current.pendingMatch),
       result: current.result,
       turn: current.turn
     };
@@ -204,13 +209,15 @@ function playerSnapshot(room, player) {
   return {
     code: room.code,
     player: { id: player.id, name: player.name, team: player.team, connected: player.connected },
-    totals: room.totals,
+    totals: room.cumulativeScores,
+    cumulativeScores: room.cumulativeScores,
+    sessionScores: room.sessionScores,
     session: session ? {
       number: session.number,
       status: session.status,
       questionIndex: session.questionIndex,
       questionCount: session.questionCount,
-      scores: session.scores,
+      scores: room.sessionScores,
       teams: session.teams,
       message: session.message,
       question
@@ -241,9 +248,109 @@ function hostAction(socket, payload, action) {
 }
 
 function normalizeAnswer(value) {
-  return String(value || '').toLocaleLowerCase().trim()
+  return String(value || '').toLowerCase().normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
     .replace(/[\p{P}\p{S}]/gu, '')
+    .trim()
     .replace(/\s+/g, ' ');
+}
+
+const irregularSingulars = new Map([
+  ['children', 'child'], ['mice', 'mouse'], ['geese', 'goose'],
+  ['men', 'man'], ['women', 'woman'], ['feet', 'foot'],
+  ['teeth', 'tooth'], ['people', 'person'], ['oxen', 'ox']
+]);
+const vesSingulars = new Map([
+  ['leaves', 'leaf'], ['knives', 'knife'], ['wives', 'wife'],
+  ['shelves', 'shelf'], ['wolves', 'wolf'], ['halves', 'half'],
+  ['lives', 'life'], ['loaves', 'loaf'], ['thieves', 'thief'],
+  ['selves', 'self'], ['calves', 'calf'], ['scarves', 'scarf'],
+  ['dwarves', 'dwarf'], ['hooves', 'hoof']
+]);
+
+function singularizeWord(word) {
+  const irregular = irregularSingulars.get(word);
+  if (irregular) return irregular;
+  let candidate = word;
+  if (['cookies', 'movies', 'pies', 'ties', 'lies', 'dies', 'brownies', 'selfies'].includes(word)) {
+    candidate = word.slice(0, -1);
+  } else if (word.endsWith('ies')) candidate = `${word.slice(0, -3)}y`;
+  else if (vesSingulars.has(word)) candidate = vesSingulars.get(word);
+  else if (word.endsWith('oes')) candidate = word.slice(0, -2);
+  else if (/(?:ses|xes|zes|ches|shes)$/.test(word)) candidate = word.slice(0, -2);
+  else if (word.length > 2 && word.endsWith('s') && !word.endsWith('ss')) candidate = word.slice(0, -1);
+  return candidate.length > 1 ? candidate : word;
+}
+
+function singularize(value) {
+  return normalizeAnswer(value).split(' ').map(singularizeWord).join(' ');
+}
+
+function pluralMatch(input, candidate) {
+  const normalizedInput = normalizeAnswer(input);
+  const normalizedCandidate = normalizeAnswer(candidate);
+  const singularInput = singularize(normalizedInput);
+  const singularCandidate = singularize(normalizedCandidate);
+  return singularInput === singularCandidate || singularInput === normalizedCandidate ||
+    normalizedInput === singularCandidate;
+}
+
+function levenshteinDistance(left, right) {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1)
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length];
+}
+
+function fuzzyCandidates(input, answers, allowedIndexes) {
+  const normalizedInput = normalizeAnswer(input);
+  const matches = [];
+  for (const index of allowedIndexes) {
+    const candidate = normalizeAnswer(answers[index].text);
+    if ((normalizedInput.endsWith('ss') && normalizedInput.slice(0, -1) === candidate) ||
+        (candidate.endsWith('ss') && candidate.slice(0, -1) === normalizedInput)) continue;
+    const length = candidate.length;
+    const threshold = length <= 5 ? 1 : length <= 12 ? 2 : 3;
+    const distance = levenshteinDistance(normalizedInput, candidate);
+    if (distance <= threshold && distance / Math.max(length, normalizedInput.length, 1) <= 0.25) {
+      matches.push({ index, distance });
+    }
+  }
+  if (!matches.length) return { index: -1, ambiguous: false };
+  const closest = Math.min(...matches.map((match) => match.distance));
+  const tied = matches.filter((match) => match.distance === closest);
+  return tied.length === 1
+    ? { index: tied[0].index, ambiguous: false }
+    : { index: -1, ambiguous: true };
+}
+
+function recordSubmission(room, submission, result, points = 0, note = '') {
+  const session = room.session;
+  if (!session) return;
+  const questionNumber = session.questionIndex + 1;
+  let group = session.submissionLog[session.submissionLog.length - 1];
+  if (!group || group.questionNumber !== questionNumber) {
+    group = { questionNumber, questionText: session.question?.text || '', entries: [] };
+    session.submissionLog.push(group);
+  }
+  group.entries.push({
+    timestamp: submission.submittedAt || Date.now(),
+    team: submission.team || session.question?.activeTeam || 'blue',
+    playerName: submission.playerName || '—',
+    rawInput: submission.text || '',
+    result,
+    points,
+    note
+  });
 }
 
 function clearTimer(question) {
@@ -251,15 +358,22 @@ function clearTimer(question) {
   question.timer = null;
 }
 
+function clearConfirmationTimer(question) {
+  if (question.confirmationTimer) clearTimeout(question.confirmationTimer);
+  question.confirmationTimer = null;
+}
+
 function finishQuestion(room, awardTeam, result) {
   const session = room.session;
   const question = session.question;
   clearTimer(question);
+  clearConfirmationTimer(question);
+  question.pendingMatch = null;
   question.status = 'ended';
   question.deadline = null;
   question.result = result;
   question.awardedTeam = awardTeam;
-  if (awardTeam) session.scores[awardTeam] += question.accumulated;
+  if (awardTeam) room.sessionScores[awardTeam] += question.accumulated;
   session.completedQuestions += 1;
   session.status = 'question-ended';
   session.message = result;
@@ -273,6 +387,12 @@ function startTimer(room, seconds, mode) {
   question.timer = setTimeout(() => {
     const latest = rooms.get(room.code)?.session?.question;
     if (!latest || latest !== question || latest.status === 'ended') return;
+    recordSubmission(room, latest.submission || {
+      text: '',
+      team: latest.activeTeam,
+      playerName: '—',
+      submittedAt: Date.now()
+    }, 'Timed out');
     if (latest.status === 'steal') {
       finishQuestion(room, latest.stolenFrom, 'Time expired. The original team keeps the points.');
     } else {
@@ -284,6 +404,9 @@ function startTimer(room, seconds, mode) {
 
 function beginSteal(room) {
   const question = room.session.question;
+  if (question.submission) {
+    recordSubmission(room, question.submission, 'Wrong', 0, 'Control passed before resolution.');
+  }
   question.status = 'steal';
   question.stolenFrom = question.activeTeam;
   question.activeTeam = question.activeTeam === 'blue' ? 'red' : 'blue';
@@ -293,6 +416,8 @@ function beginSteal(room) {
 
 function applyStrike(room, note = 'Strike added.') {
   const question = room.session.question;
+  clearConfirmationTimer(question);
+  question.pendingMatch = null;
   question.strikes[question.activeTeam] += 1;
   question.submission = null;
   question.result = note;
@@ -303,37 +428,107 @@ function applyStrike(room, note = 'Strike added.') {
   }
 }
 
-function resolveAnswer(room, answerText) {
+function awardMatch(room, submission, index, matchType = 'Correct') {
   const session = room.session;
   const question = session.question;
-  const normalized = normalizeAnswer(answerText);
-  if (!normalized) fail('Enter an answer, or use Add Strike for an empty answer.');
-  const index = question.answers.findIndex((answer, answerIndex) =>
-    normalizeAnswer(answer.text) === normalized && !question.revealed.includes(answerIndex));
-
+  const answer = question.answers[index];
+  recordSubmission(room, submission, matchType, answer.points);
+  question.revealed.push(index);
+  question.accumulated += answer.points;
+  question.submission = null;
   if (question.status === 'steal') {
-    if (index >= 0) {
-      question.revealed.push(index);
-      question.accumulated += question.answers[index].points;
-      finishQuestion(room, question.activeTeam, `${question.answers[index].text} is correct. ${question.activeTeam === 'blue' ? 'Blue' : 'Red'} steals ${question.accumulated} points.`);
-    } else {
-      finishQuestion(room, question.stolenFrom, 'The steal was missed. The original team keeps the points.');
-    }
+    finishQuestion(room, question.activeTeam, `${answer.text} is correct. ${question.activeTeam === 'blue' ? 'Blue' : 'Red'} steals ${question.accumulated} points.`);
+    return;
+  }
+  question.result = matchType === 'Correct'
+    ? `${answer.text} is correct for ${answer.points} points.`
+    : `${matchType}: ${answer.text} is correct for ${answer.points} points.`;
+  if (question.revealed.length === question.answers.length) {
+    finishQuestion(room, question.activeTeam, 'All answers revealed. Points awarded.');
+  } else {
+    startTimer(room, 60, 'answer');
+  }
+}
+
+function rejectPendingMatch(room, timedOut = false) {
+  const question = room.session.question;
+  const pending = question.pendingMatch;
+  if (!pending) return;
+  clearConfirmationTimer(question);
+  question.pendingMatch = null;
+  question.submission = null;
+  if (timedOut) {
+    recordSubmission(room, pending.submission, 'Timed out', 0, 'typo prompt timed out.');
+  } else {
+    recordSubmission(room, pending.submission, pending.type, 0, 'Rejected by host.');
+  }
+  if (question.status === 'steal') {
+    finishQuestion(room, question.stolenFrom, 'The steal was missed. The original team keeps the points.');
+  } else {
+    applyStrike(room, timedOut ? 'Typo prompt timed out. Strike added.' : 'Match rejected. Strike added.');
+  }
+}
+
+function resolveAnswer(room, submission) {
+  const question = room.session.question;
+  const normalized = normalizeAnswer(submission.text);
+  if (!normalized) fail('Enter an answer, or use Add Strike for an empty answer.');
+  const unrevealed = question.answers.map((_, index) => index)
+    .filter((index) => !question.revealed.includes(index));
+  const exactIndex = unrevealed.find((index) => normalizeAnswer(question.answers[index].text) === normalized);
+  if (exactIndex !== undefined) {
+    awardMatch(room, submission, exactIndex);
+    return;
+  }
+  const repeatedIndex = question.answers.findIndex((answer, index) =>
+    question.revealed.includes(index) && normalizeAnswer(answer.text) === normalized);
+  if (repeatedIndex >= 0) {
+    recordSubmission(room, submission, 'Repeated');
+    applyStrike(room, 'Repeated answer. Strike added.');
     return;
   }
 
-  if (index >= 0) {
-    question.revealed.push(index);
-    question.accumulated += question.answers[index].points;
-    question.result = `${question.answers[index].text} is correct for ${question.answers[index].points} points.`;
-    question.submission = null;
-    if (question.revealed.length === question.answers.length) {
-      finishQuestion(room, question.activeTeam, 'All answers revealed. Points awarded.');
-    } else {
-      startTimer(room, 60, 'answer');
+  if (room.typoToleranceEnabled) {
+    const pluralIndex = unrevealed.find((index) => pluralMatch(submission.text, question.answers[index].text));
+    if (pluralIndex !== undefined) {
+      question.submission = null;
+      question.pendingMatch = { index: pluralIndex, type: 'Plural match', submission, deadline: Date.now() + 15000 };
+      clearTimer(question);
+      question.deadline = null;
+      question.confirmationTimer = setTimeout(() => {
+        if (room.session?.question === question && question.pendingMatch) {
+          rejectPendingMatch(room, true);
+          broadcast(room);
+        }
+      }, 15000);
+      return;
     }
+    const fuzzy = fuzzyCandidates(submission.text, question.answers, unrevealed);
+    if (fuzzy.ambiguous) {
+      recordSubmission(room, submission, 'Wrong', 0, 'ambiguous typo match — host can override.');
+      applyStrike(room, 'Ambiguous typo match. Host can override.');
+      return;
+    }
+    if (fuzzy.index >= 0) {
+      question.submission = null;
+      question.pendingMatch = { index: fuzzy.index, type: 'Typo match', submission, deadline: Date.now() + 15000 };
+      clearTimer(question);
+      question.deadline = null;
+      question.confirmationTimer = setTimeout(() => {
+        if (room.session?.question === question && question.pendingMatch) {
+          rejectPendingMatch(room, true);
+          broadcast(room);
+        }
+      }, 15000);
+      return;
+    }
+  }
+
+  recordSubmission(room, submission, 'Wrong');
+  if (question.status === 'steal') {
+    finishQuestion(room, question.stolenFrom, 'The steal was missed. The original team keeps the points.');
   } else {
-    applyStrike(room, 'Wrong or already revealed answer.');
+    applyStrike(room, 'Wrong answer.');
   }
 }
 
@@ -353,29 +548,37 @@ function initializeQuestion(room, index) {
     activeTeam: startingTeam,
     status: 'playing',
     submission: null,
+    pendingMatch: null,
     deadline: null,
     timer: null,
+    confirmationTimer: null,
     turn: 'answer',
     result: '',
     stolenFrom: null
   };
+  session.submissionLog.push({
+    questionNumber: index + 1,
+    questionText: source.question,
+    entries: []
+  });
   startTimer(room, 60, 'answer');
 }
 
 function validateQuestions(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 100) fail('Provide between 1 and 100 questions.');
   return value.map((item, index) => {
-    const question = String(item?.question || '').trim().slice(0, 180);
-    if (!question) fail(`Question ${index + 1} needs question text.`);
+    const question = item?.question;
+    if (typeof question !== 'string' || !question.trim() || question.length > 180) fail(`Question ${index + 1} needs question text (up to 180 characters).`);
     if (!Array.isArray(item.answers) || item.answers.length < 2 || item.answers.length > 12) {
       fail(`Question ${index + 1} needs 2 to 12 answers.`);
     }
     const answers = item.answers.map((answer, answerIndex) => {
-      const text = String(answer?.text || '').trim().slice(0, 80);
+      const text = answer?.text;
       const points = Number(answer?.points);
-      if (!text || !Number.isInteger(points) || points < 1 || points > 10000) {
-        fail(`Question ${index + 1}, answer ${answerIndex + 1}: enter text and positive integer points.`);
+      if (typeof text !== 'string' || !text.trim() || text.length > 80 || !Number.isInteger(points) || points < 1 || points > 10000) {
+        fail(`Question ${index + 1}, answer ${answerIndex + 1}: enter answer text (up to 80 characters) and positive integer points.`);
       }
+      if (!normalizeAnswer(text)) fail(`Question ${index + 1}, answer ${answerIndex + 1}: include at least one letter or number.`);
       return { text, points };
     });
     if (new Set(answers.map((answer) => normalizeAnswer(answer.text))).size !== answers.length) {
@@ -397,7 +600,9 @@ function createRoom() {
     players: new Map(),
     playedPlayerIds: new Set(),
     questions: safeQuestions(defaultQuestions),
-    totals: { blue: 0, red: 0 },
+    sessionScores: { blue: 0, red: 0 },
+    cumulativeScores: { blue: 0, red: 0 },
+    typoToleranceEnabled: true,
     sessionNumber: 0,
     session: null,
     history: []
@@ -477,11 +682,11 @@ io.on('connection', (socket) => {
     const player = room?.players.get(reference.id);
     const question = room?.session?.question;
     if (!player || !player.connected || player.socketId !== socket.id) fail('Join the room before submitting.');
-    if (!question || !['playing', 'steal'].includes(question.status) || question.activeTeam !== player.team) fail('Your team is not active right now.');
+    if (!question || !['playing', 'steal'].includes(question.status) || question.pendingMatch || question.activeTeam !== player.team) fail('Your team is not active right now.');
     if (question.submission) fail('Your team already submitted an answer.');
-    const text = String(answer || '').trim().slice(0, 80);
-    if (!text) fail('Enter an answer first.');
-    question.submission = { text, playerName: player.name };
+    const text = String(answer ?? '').slice(0, 80);
+    if (!text.trim()) fail('Enter an answer first.');
+    question.submission = { text, playerName: player.name, team: player.team, submittedAt: Date.now() };
     broadcast(room);
     return {};
   });
@@ -507,6 +712,7 @@ io.on('connection', (socket) => {
       const count = Math.min(10, waiting.length) - (Math.min(10, waiting.length) % 2);
       if (count < 4) fail('At least 4 connected waiting players are needed to start.');
       const selected = waiting.slice(0, count);
+      room.sessionScores = { blue: 0, red: 0 };
       const teams = { blue: [], red: [] };
       selected.forEach((player, index) => {
         player.team = index % 2 === 0 ? 'blue' : 'red';
@@ -520,8 +726,8 @@ io.on('connection', (socket) => {
         questionCount: Math.min(3, room.questions.length),
         playerIds: selected.map((player) => player.id),
         teams,
-        scores: { blue: 0, red: 0 },
         completedQuestions: 0,
+        submissionLog: [],
         question: null,
         message: 'Teams are set. Start the first question when ready.'
       };
@@ -558,26 +764,52 @@ io.on('connection', (socket) => {
     }),
     hostSubmitAnswer: ({ code, token, answer }) => hostAction(socket, { code, token }, (room) => {
       const question = room.session?.question;
-      if (!question || !['playing', 'steal'].includes(question.status) || question.submission) fail('No answer can be entered right now.');
-      const value = String(answer || '').trim().slice(0, 80);
-      if (!value) fail('Enter an answer first.');
-      question.submission = { text: value, playerName: 'Host override' };
+      if (!question || !['playing', 'steal'].includes(question.status) || question.submission || question.pendingMatch) fail('No answer can be entered right now.');
+      const value = String(answer ?? '').slice(0, 80);
+      if (!value.trim()) fail('Enter an answer first.');
+      question.submission = { text: value, playerName: 'host override', team: question.activeTeam, submittedAt: Date.now() };
       return {};
     }),
     resolveAnswer: ({ code, token, answer }) => hostAction(socket, { code, token }, (room) => {
       const question = room.session?.question;
-      if (!question || !['playing', 'steal'].includes(question.status)) fail('There is no answer to resolve.');
-      resolveAnswer(room, answer || question.submission?.text || '');
+      if (!question || !['playing', 'steal'].includes(question.status) || question.pendingMatch) fail('There is no answer to resolve.');
+      const rawAnswer = String(answer ?? '');
+      const manualOverride = Boolean(rawAnswer.trim());
+      if (manualOverride && question.submission) {
+        recordSubmission(room, question.submission, 'Wrong', 0, 'Superseded by host override.');
+      }
+      const submission = manualOverride
+        ? { text: rawAnswer.slice(0, 80), playerName: 'host override', team: question.activeTeam, submittedAt: Date.now() }
+        : question.submission;
+      if (!submission) fail('Enter an answer, or submit one before resolving.');
+      resolveAnswer(room, submission);
+      return {};
+    }),
+    decideMatch: ({ code, token, accept }) => hostAction(socket, { code, token }, (room) => {
+      const question = room.session?.question;
+      if (!question?.pendingMatch) fail('There is no match waiting for confirmation.');
+      if (accept) {
+        const pending = question.pendingMatch;
+        clearConfirmationTimer(question);
+        question.pendingMatch = null;
+        awardMatch(room, pending.submission, pending.index, pending.type);
+      } else {
+        rejectPendingMatch(room);
+      }
       return {};
     }),
     clearSubmission: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
       const question = room.session?.question;
       if (!question || !['playing', 'steal'].includes(question.status)) fail('There is no active submission.');
+      if (question.submission) recordSubmission(room, question.submission, 'Wrong', 0, 'Submission cleared by host.');
       question.submission = null;
       return {};
     }),
     addStrike: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
       if (!room.session?.question || room.session.question.status !== 'playing') fail('A strike can only be added during a regular turn.');
+      if (room.session.question.submission) {
+        recordSubmission(room, room.session.question.submission, 'Wrong', 0, 'Strike added by host.');
+      }
       applyStrike(room);
       return {};
     }),
@@ -585,8 +817,10 @@ io.on('connection', (socket) => {
       const question = room.session?.question;
       if (!question || !['playing', 'steal'].includes(question.status)) fail('There is no active timer to skip.');
       if (question.status === 'steal') {
+        recordSubmission(room, question.submission || { team: question.activeTeam, playerName: '—', text: '', submittedAt: Date.now() }, 'Timed out');
         finishQuestion(room, question.stolenFrom, 'The host ended the steal timer. The original team keeps the points.');
       } else {
+        recordSubmission(room, question.submission || { team: question.activeTeam, playerName: '—', text: '', submittedAt: Date.now() }, 'Timed out');
         applyStrike(room, 'The host skipped the timer.');
       }
       return {};
@@ -615,12 +849,26 @@ io.on('connection', (socket) => {
     endSession: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
       const session = room.session;
       if (!session) fail('There is no active session.');
-      if (session.question?.timer) clearTimer(session.question);
-      if (session.completedQuestions > 0) {
-        room.totals.blue += session.scores.blue;
-        room.totals.red += session.scores.red;
+      if (session.question) {
+        clearTimer(session.question);
+        clearConfirmationTimer(session.question);
+        if (session.question.pendingMatch) {
+          recordSubmission(room, session.question.pendingMatch.submission, 'Timed out', 0, 'Session ended before confirmation.');
+        } else if (session.question.submission) {
+          recordSubmission(room, session.question.submission, 'Wrong', 0, 'Session ended before resolution.');
+        }
       }
-      room.history.push({ number: session.number, blue: session.scores.blue, red: session.scores.red, questions: session.completedQuestions });
+      if (session.completedQuestions > 0) {
+        room.cumulativeScores.blue += room.sessionScores.blue;
+        room.cumulativeScores.red += room.sessionScores.red;
+      }
+      room.history.push({
+        number: session.number,
+        blue: room.sessionScores.blue,
+        red: room.sessionScores.red,
+        questions: session.completedQuestions,
+        submissionLog: session.submissionLog
+      });
       for (const id of session.playerIds) {
         const player = room.players.get(id);
         if (player) {
@@ -628,7 +876,12 @@ io.on('connection', (socket) => {
           room.playedPlayerIds.add(id);
         }
       }
+      room.sessionScores = { blue: 0, red: 0 };
       room.session = null;
+      return {};
+    }),
+    setTypoTolerance: ({ code, token, enabled }) => hostAction(socket, { code, token }, (room) => {
+      room.typoToleranceEnabled = Boolean(enabled);
       return {};
     }),
     removePlayer: ({ code, token, playerId }) => hostAction(socket, { code, token }, (room) => {
@@ -658,12 +911,14 @@ io.on('connection', (socket) => {
     }),
     resetRoom: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
       if (room.session?.question?.timer) clearTimer(room.session.question);
+      if (room.session?.question) clearConfirmationTimer(room.session.question);
       for (const player of room.players.values()) {
         if (player.connected) io.to(player.socketId).emit('playerRemoved', 'The host reset the room.');
       }
       room.players.clear();
       room.playedPlayerIds.clear();
-      room.totals = { blue: 0, red: 0 };
+      room.sessionScores = { blue: 0, red: 0 };
+      room.cumulativeScores = { blue: 0, red: 0 };
       room.sessionNumber = 0;
       room.session = null;
       room.history = [];

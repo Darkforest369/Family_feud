@@ -1,6 +1,74 @@
 (() => {
   const socket = io();
   const $ = (selector) => document.querySelector(selector);
+  const THEMES = {
+    default: {
+      id: 'default', name: 'Default', title: 'Family Feud',
+      colors: {
+        bg: '#FFF8DC', text: '#2E4057', primary: '#F4A261', accent: '#F4A261',
+        teamBlue: '#2E7DD1', teamRed: '#D13B3B'
+      }
+    },
+    christmas: {
+      id: 'christmas', name: 'Christmas', title: 'Christmas Feud',
+      colors: {
+        bg: '#0B3D2E', text: '#FFFDF4', primary: '#C8102E', accent: '#FFD700',
+        teamBlue: '#2E7DD1', teamRed: '#D13B3B'
+      }
+    },
+    easter: {
+      id: 'easter', name: 'Easter', title: 'Easter Feud',
+      colors: {
+        bg: '#FCE4EC', text: '#2E4057', primary: '#9C27B0', accent: '#8BC34A',
+        teamBlue: '#64B5F6', teamRed: '#EF9A9A'
+      }
+    }
+  };
+  const warnedThemes = new Set();
+  function getTheme(themeId) {
+    if (Object.hasOwn(THEMES, themeId)) return THEMES[themeId];
+    if (!warnedThemes.has(themeId)) {
+      console.warn(`Unknown theme "${themeId}"; using the default theme.`);
+      warnedThemes.add(themeId);
+    }
+    return THEMES.default;
+  }
+  function applyTheme(themeId) {
+    const theme = getTheme(themeId);
+    document.documentElement.dataset.theme = theme.id;
+    document.title = theme.title;
+    document.querySelectorAll('[data-theme-title]').forEach((element) => {
+      element.textContent = theme.title;
+    });
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = theme.colors.bg;
+    return theme.id;
+  }
+  let landingThemeId = localStorage.getItem('ff_landing_theme') || 'default';
+  landingThemeId = applyTheme(landingThemeId);
+
+  function renderThemePicker() {
+    $('#theme-picker').innerHTML = Object.values(THEMES).map((theme) => `
+      <button class="theme-card" type="button" data-theme-choice="${theme.id}" aria-pressed="${theme.id === landingThemeId}">
+        <span class="theme-swatches" aria-hidden="true">
+          <i style="--swatch-color:${theme.colors.bg}"></i>
+          <i style="--swatch-color:${theme.colors.text}"></i>
+          <i style="--swatch-color:${theme.colors.primary}"></i>
+          <i style="--swatch-color:${theme.colors.accent}"></i>
+          <i style="--swatch-color:${theme.colors.teamBlue}"></i>
+          <i style="--swatch-color:${theme.colors.teamRed}"></i>
+        </span>
+        <span class="theme-card-name">${theme.name}</span>
+      </button>`).join('');
+  }
+  renderThemePicker();
+  $('#theme-picker').addEventListener('click', (event) => {
+    const card = event.target.closest('[data-theme-choice]');
+    if (!card) return;
+    landingThemeId = applyTheme(card.dataset.themeChoice);
+    localStorage.setItem('ff_landing_theme', landingThemeId);
+    renderThemePicker();
+  });
   const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[character]);
@@ -61,6 +129,7 @@
     $('#landing-view').hidden = Boolean(route);
     $('#host-route').hidden = route !== 'host';
     $('#join-route').hidden = route !== 'join';
+    if (!route) applyTheme(landingThemeId);
     if (route === 'join' && params.room) $('#room-input').value = params.room.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
     if (!savedHost.code && !savedPlayer.code && route === 'host') $('#create-panel').hidden = false;
   }
@@ -107,9 +176,11 @@
 
     function render(state) {
       current = state;
+      const themeId = applyTheme(state.themeId);
       $('#create-panel').hidden = true;
       $('#dashboard').hidden = false;
       $('#room-code').textContent = state.code;
+      $('#room-theme-name').textContent = THEMES[themeId].name;
       updateShareLink();
       $('#blue-total').textContent = state.totals.blue;
       $('#red-total').textContent = state.totals.red;
@@ -267,8 +338,11 @@
         ? (current.session.status === 'complete' ? sessions[sessions.length - 1] : null)
         : sessions[sessions.length - 1];
       $('#summary-submission-log').innerHTML = latest
-        ? `<h3>Session ${latest.number} submission log</h3><div class="summary-log-scroll">${renderLogGroups([latest], true)}</div>`
+        ? `<h3><span data-theme-title></span> · Session ${latest.number} submission log</h3><div class="summary-log-scroll">${renderLogGroups([latest], true)}</div>`
         : '';
+      if (latest) {
+        $('#summary-submission-log [data-theme-title]').textContent = THEMES[getTheme(current.themeId).id].title;
+      }
     }
 
     function renderHistory() {
@@ -405,7 +479,7 @@
       const button = $('#create-room');
       button.disabled = true;
       try {
-        const result = await new Promise((resolve, reject) => socket.emit('createRoom', {}, (reply) => reply?.ok ? resolve(reply) : reject(new Error(reply?.error || 'Could not create room.'))));
+        const result = await new Promise((resolve, reject) => socket.emit('createRoom', { themeId: landingThemeId }, (reply) => reply?.ok ? resolve(reply) : reject(new Error(reply?.error || 'Could not create room.'))));
         localStorage.setItem('feudHostCode', result.code);
         localStorage.setItem('feudHostToken', result.token);
         setRoute('host');
@@ -441,7 +515,7 @@
       if (confirm('End this session and add completed-question points to the cumulative score? An unfinished question will not count.')) act('endSession');
     });
     $('#reset-room').addEventListener('click', () => {
-      if (confirm('Reset the room? This clears players and all scores but keeps the question bank.')) act('resetRoom');
+      if (confirm('Reset the room? This clears players and all scores but keeps the question bank and theme.')) act('resetRoom');
     });
     $('#host-leave').addEventListener('click', leave);
     $('#players-list').addEventListener('click', (event) => {
@@ -541,7 +615,8 @@
       const file = new Blob([JSON.stringify(canonicalQuestions, null, 2)], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(file);
-      link.download = `christmas-feud-${current.code}-questions.json`;
+      const themeSlug = THEMES[getTheme(current.themeId).id].title.toLowerCase().replaceAll(' ', '-');
+      link.download = `${themeSlug}-${current.code}-questions.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     });
@@ -611,6 +686,7 @@
 
     function render(nextState) {
       current = nextState;
+      applyTheme(current.themeId);
       $('#join-panel').hidden = true;
       $('#player-view').hidden = false;
       $('#player-room-code').textContent = `ROOM ${current.code}`;

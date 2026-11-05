@@ -12,7 +12,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true, credentials: true } });
 const rooms = new Map();
 
-const defaultQuestions = [
+const christmasQuestions = [
   {
     question: 'Name a Christmas food.',
     answers: [
@@ -104,6 +104,146 @@ const defaultQuestions = [
   }
 ];
 
+const defaultQuestions = [
+  {
+    question: 'Name a pizza topping.',
+    answers: [
+      { text: 'Pepperoni', points: 30 }, { text: 'Mushrooms', points: 20 },
+      { text: 'Sausage', points: 18 }, { text: 'Extra cheese', points: 14 },
+      { text: 'Olives', points: 10 }, { text: 'Peppers', points: 8 }
+    ]
+  },
+  {
+    question: 'Name something found in a classroom.',
+    answers: [
+      { text: 'Desks', points: 25 }, { text: 'Chalkboard', points: 22 },
+      { text: 'Books', points: 20 }, { text: 'Pencils', points: 15 },
+      { text: 'Computer', points: 10 }, { text: 'Clock', points: 8 }
+    ]
+  },
+  {
+    question: 'Name a household chore.',
+    answers: [
+      { text: 'Doing dishes', points: 25 }, { text: 'Vacuuming', points: 22 },
+      { text: 'Laundry', points: 20 }, { text: 'Taking out trash', points: 15 },
+      { text: 'Dusting', points: 10 }, { text: 'Mopping', points: 8 }
+    ]
+  },
+  {
+    question: 'Name something people bring to a picnic.',
+    answers: [
+      { text: 'Sandwiches', points: 25 }, { text: 'Drinks', points: 22 },
+      { text: 'Blanket', points: 18 }, { text: 'Chips', points: 15 },
+      { text: 'Fruit', points: 12 }, { text: 'Dessert', points: 8 }
+    ]
+  },
+  {
+    question: 'Name an animal you might see at a zoo.',
+    answers: [
+      { text: 'Lion', points: 25 }, { text: 'Elephant', points: 22 },
+      { text: 'Monkey', points: 18 }, { text: 'Giraffe', points: 15 },
+      { text: 'Tiger', points: 12 }, { text: 'Penguin', points: 8 }
+    ]
+  },
+  {
+    question: 'Name something you do before going to bed.',
+    answers: [
+      { text: 'Brush teeth', points: 25 }, { text: 'Change clothes', points: 22 },
+      { text: 'Read', points: 18 }, { text: 'Set an alarm', points: 15 },
+      { text: 'Wash face', points: 12 }, { text: 'Check phone', points: 8 }
+    ]
+  },
+  {
+    question: 'Name a popular breakfast food.',
+    answers: [
+      { text: 'Eggs', points: 25 }, { text: 'Cereal', points: 22 },
+      { text: 'Toast', points: 18 }, { text: 'Pancakes', points: 15 },
+      { text: 'Bacon', points: 12 }, { text: 'Oatmeal', points: 8 }
+    ]
+  },
+  {
+    question: 'Name something you might pack for a day trip.',
+    answers: [
+      { text: 'Water bottle', points: 25 }, { text: 'Snacks', points: 22 },
+      { text: 'Phone', points: 18 }, { text: 'Jacket', points: 15 },
+      { text: 'Sunscreen', points: 12 }, { text: 'Camera', points: 8 }
+    ]
+  }
+];
+
+const easterQuestions = [
+  {
+    question: 'Name an Easter candy.',
+    answers: [
+      { text: 'Chocolate eggs', points: 25 }, { text: 'Jelly beans', points: 22 },
+      { text: 'Chocolate bunny', points: 20 }, { text: 'Peeps', points: 15 },
+      { text: 'Cadbury Creme Egg', points: 10 }, { text: 'Marshmallow eggs', points: 8 }
+    ]
+  },
+  {
+    question: 'Name an animal associated with Easter.',
+    answers: [
+      { text: 'Bunny', points: 35 }, { text: 'Chick', points: 25 },
+      { text: 'Lamb', points: 15 }, { text: 'Duckling', points: 10 },
+      { text: 'Chicken', points: 8 }, { text: 'Butterfly', points: 7 }
+    ]
+  },
+  {
+    question: 'Name something you do on Easter.',
+    answers: [
+      { text: 'Eat a meal with family', points: 25 }, { text: 'Egg hunt', points: 22 },
+      { text: 'Go to church', points: 18 }, { text: 'Give candy', points: 15 },
+      { text: 'Decorate eggs', points: 12 }, { text: 'Visit relatives', points: 8 }
+    ]
+  },
+  {
+    question: 'Name a color of an Easter egg.',
+    answers: [
+      { text: 'Pink', points: 22 }, { text: 'Blue', points: 20 },
+      { text: 'Yellow', points: 18 }, { text: 'Purple', points: 16 },
+      { text: 'Green', points: 14 }, { text: 'Orange', points: 10 }
+    ]
+  },
+  {
+    question: 'Name something you might find in an Easter basket.',
+    answers: [
+      { text: 'Chocolate', points: 25 }, { text: 'Jelly beans', points: 22 },
+      { text: 'Toy', points: 18 }, { text: 'Stuffed bunny', points: 15 },
+      { text: 'Plastic eggs', points: 12 }, { text: 'Books', points: 8 }
+    ]
+  },
+  {
+    question: 'Name something used to decorate Easter eggs.',
+    answers: [
+      { text: 'Dye', points: 28 }, { text: 'Paint', points: 22 },
+      { text: 'Markers', points: 18 }, { text: 'Stickers', points: 14 },
+      { text: 'Glitter', points: 10 }, { text: 'Crayons', points: 8 }
+    ]
+  },
+  {
+    question: 'Name a food served at Easter dinner.',
+    answers: [
+      { text: 'Ham', points: 28 }, { text: 'Potatoes', points: 22 },
+      { text: 'Lamb', points: 18 }, { text: 'Deviled eggs', points: 14 },
+      { text: 'Carrots', points: 10 }, { text: 'Rolls', points: 8 }
+    ]
+  },
+  {
+    question: 'Name a place children look for Easter eggs.',
+    answers: [
+      { text: 'In the yard', points: 25 }, { text: 'In the garden', points: 22 },
+      { text: 'Under a bush', points: 18 }, { text: 'Behind a tree', points: 15 },
+      { text: 'In the house', points: 12 }, { text: 'In a basket', points: 8 }
+    ]
+  }
+];
+
+const themeRegistry = {
+  default: { id: 'default', name: 'Default', title: 'Family Feud', defaultQuestions },
+  christmas: { id: 'christmas', name: 'Christmas', title: 'Christmas Feud', defaultQuestions: christmasQuestions },
+  easter: { id: 'easter', name: 'Easter', title: 'Easter Feud', defaultQuestions: easterQuestions }
+};
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/host', (req, res) => res.redirect(302, '/#host'));
@@ -138,6 +278,7 @@ function hostSnapshot(room) {
   const session = room.session;
   return {
     code: room.code,
+    themeId: room.themeId,
     players: [...room.players.values()].map((player) => ({
       id: player.id,
       name: player.name,
@@ -208,6 +349,7 @@ function playerSnapshot(room, player) {
   }
   return {
     code: room.code,
+    themeId: room.themeId,
     player: { id: player.id, name: player.name, team: player.team, connected: player.connected },
     totals: room.cumulativeScores,
     cumulativeScores: room.cumulativeScores,
@@ -588,18 +730,22 @@ function validateQuestions(value) {
   });
 }
 
-function createRoom() {
+function createRoom(requestedThemeId) {
   let code;
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   do {
     code = [...crypto.randomBytes(5)].map((byte) => alphabet[byte % alphabet.length]).join('');
   } while (rooms.has(code));
+  const themeId = Object.hasOwn(themeRegistry, requestedThemeId) ? requestedThemeId : 'default';
+  const theme = themeRegistry[themeId];
   const room = {
     code,
+    // Theme is immutable for this room's lifetime, including Reset room.
+    themeId,
     hostToken: crypto.randomBytes(24).toString('hex'),
     players: new Map(),
     playedPlayerIds: new Set(),
-    questions: safeQuestions(defaultQuestions),
+    questions: safeQuestions(theme.defaultQuestions),
     sessionScores: { blue: 0, red: 0 },
     cumulativeScores: { blue: 0, red: 0 },
     typoToleranceEnabled: true,
@@ -623,8 +769,8 @@ function respond(socket, event, handler) {
 }
 
 io.on('connection', (socket) => {
-  respond(socket, 'createRoom', () => {
-    const room = createRoom();
+  respond(socket, 'createRoom', ({ themeId } = {}) => {
+    const room = createRoom(themeId);
     socket.join(roomChannel(room.code));
     socket.join(hostChannel(room.code));
     return { code: room.code, token: room.hostToken, state: hostSnapshot(room) };
@@ -940,5 +1086,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Christmas Family Feud is listening on port ${PORT}.`);
+  console.log(`Family Feud server is listening on port ${PORT}.`);
 });

@@ -38,3 +38,9 @@ The host can click **Question editor** between sessions to add, edit, delete, an
 | Players get 401 or cannot connect | Confirm they are using the Render HTTPS URL, not a local-network address or `localhost`. |
 | Service is slow to load after a break | It may have spun down; wait about 1 minute for it to wake, or use an uptime pinger. |
 | Socket.IO connection error | Confirm Socket.IO is using the page's origin and that Express proxy trust is enabled. |
+
+## Current round and presentation behavior
+
+These notes supersede the older fixed question-count, score-banking, and typed-answer instructions above. Each round plays every question in the current room question bank. Round scores start at zero and do not carry into later rounds; ending a round records its score in round history and resets the live score. During play, the host reveals answers by clicking tiles. Player submissions that exactly match an unrevealed answer after lowercase, trimming, and punctuation normalization reveal automatically; other submissions remain pending for the host to judge with a tile click or strike.
+
+Open `/presentation?room=CODE` in a second window for a read-only projector view, or use **Open presentation** from the host room. The view mirrors question reveals and round scoring, and shows the final score after the host selects **Show Final Score**.

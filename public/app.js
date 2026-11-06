@@ -123,6 +123,11 @@
     const savedHost = hostSaved();
     const savedPlayer = playerSaved();
     const params = hashRoute();
+    if (params.route === 'presentation') {
+      const room = params.room.trim().toUpperCase();
+      if (room) window.location.replace(`/presentation?room=${encodeURIComponent(room)}`);
+      return;
+    }
     if (savedHost.code && savedHost.token) params.route = 'host';
     else if (savedPlayer.code && savedPlayer.playerId && savedPlayer.name) params.route = 'join';
     const route = params.route === 'host' || params.route === 'join' ? params.route : '';
@@ -172,6 +177,9 @@
       $('#join-url').href = link.toString();
       $('#join-url').textContent = link.toString();
       $('#join-qr').src = `/qr.svg?url=${encodeURIComponent(link.toString())}`;
+      const presentation = new URL('/presentation', publicBase || window.location.origin);
+      presentation.searchParams.set('room', current.code);
+      $('#presentation-link').href = presentation.toString();
     }
 
     function render(state) {
@@ -187,8 +195,6 @@
       $('#red-total').textContent = roundScores.red;
       const roundNumber = state.session?.number ?? Math.max(0, state.sessionNumber || 0);
       $('#session-scoreline').textContent = `Round ${roundNumber} — Blue ${roundScores.blue} / Red ${roundScores.red}`;
-      $('#typo-toggle').textContent = `Typo tolerance: ${state.typoToleranceEnabled ? 'ON' : 'OFF'}`;
-      $('#typo-toggle').setAttribute('aria-pressed', String(state.typoToleranceEnabled));
       $('#player-count').textContent = `${state.players.length} ${state.players.length === 1 ? 'player' : 'players'}`;
       $('#players-heading-count').textContent = state.players.length;
       $('#session-label').textContent = state.session ? `ROUND ${state.session.number}` : 'NO ROUND';
@@ -236,7 +242,7 @@
       $('#question-editor-open').title = session ? 'End the session before editing questions' : '';
       $('#end-session').hidden = !session;
       $('#ready-view').hidden = Boolean(question);
-      $('#board-view').hidden = !question;
+      $('#board-view').hidden = !question || session?.status === 'complete';
       $('#final-score').hidden = session?.status !== 'complete';
       if (session?.status === 'complete') {
         $('#final-copy').textContent = `Round ${session.number} finished ${session.scores.blue}–${session.scores.red}.`;
@@ -257,8 +263,14 @@
         const revealed = question.revealed.includes(index) || question.status === 'ended';
         const owner = revealed ? (question.revealedBy?.[index] ?? null) : null;
         const ownerClass = owner === 'blue' ? 'blue' : owner === 'red' ? 'red' : 'unmatched';
-        const classes = revealed ? `answer-tile revealed ${ownerClass}` : 'answer-tile';
-        return `<div class="${classes}"><span class="answer-index">${String(index + 1).padStart(2, '0')}</span>${revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`;
+        const classes = `answer-tile host-answer-tile${revealed ? ` revealed ${ownerClass}` : ''}`;
+        const indicator = revealed ? '✓' : '✗';
+        return `<button class="${classes}" type="button" data-reveal-answer="${index}" aria-label="${revealed ? 'Revealed' : 'Unrevealed'} answer ${index + 1}: ${escape(answer.text)}, ${answer.points} points">
+          <span class="answer-index">${String(index + 1).padStart(2, '0')}</span>
+          <span class="answer-state ${revealed ? 'is-revealed' : 'is-hidden'}" aria-hidden="true">${indicator}</span>
+          <span class="answer-copy">${escape(answer.text)}</span>
+          <span class="answer-points">${answer.points}</span>
+        </button>`;
       }).join('');
       ['blue', 'red'].forEach((team) => {
         const element = $(`#${team}-strikes`);
@@ -270,27 +282,20 @@
         $('#submitted-answer').textContent = question.submission.text;
         $('#submitted-by').textContent = `Submitted by ${question.submission.playerName}`;
       }
-      const pendingMatch = question.pendingMatch;
-      $('#match-confirmation').hidden = !pendingMatch;
-      if (pendingMatch) {
-        const answer = question.answers[pendingMatch.index];
-        $('#match-confirmation-copy').textContent =
-          `${question.activeTeam.toUpperCase()} submitted '${pendingMatch.submission.text}' → did you mean '${answer.text}'? ${pendingMatch.type} · auto-reject in ${Math.max(0, Math.ceil((pendingMatch.deadline - Date.now()) / 1000))}s`;
-      }
-      $('#host-override').hidden = !activeGame || Boolean(pendingMatch);
-      $('#resolve-answer').disabled = !activeGame || Boolean(pendingMatch) || (!question.submission && !$('#override-answer').value.trim());
-      $('#add-strike').hidden = !activeGame || question.status === 'steal';
+      $('#add-strike').hidden = !activeGame;
+      $('#add-strike').textContent = question.status === 'steal' ? 'Fail Steal' : 'Add Strike';
       $('#pass-control').hidden = !activeGame || question.status === 'steal';
       $('#skip-timer').hidden = !activeGame;
-      $('#next-question').hidden = question.status !== 'ended';
+      const isLastQuestion = session.questionIndex === session.questionCount - 1;
+      $('#next-question').hidden = question.status !== 'ended' || isLastQuestion;
+      $('#show-final-score').hidden = question.status !== 'ended' || !isLastQuestion;
       $('#round-result').hidden = !question.result;
       $('#round-result').textContent = question.result || '';
-      countdown(pendingMatch?.deadline || question.deadline, $('#timer'));
+      countdown(question.deadline, $('#timer'));
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(() => {
         const liveQuestion = current?.session?.question;
-        if (liveQuestion?.pendingMatch) countdown(liveQuestion.pendingMatch.deadline, $('#timer'));
-        else if (liveQuestion?.deadline) countdown(liveQuestion.deadline, $('#timer'));
+        if (liveQuestion?.deadline) countdown(liveQuestion.deadline, $('#timer'));
       }, 250);
     }
 
@@ -413,8 +418,8 @@
         }
         parsed = parsed.questions;
       }
-      if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 100) {
-        throw new Error('Provide between 1 and 100 questions.');
+      if (!Array.isArray(parsed) || parsed.length > 100) {
+        throw new Error('Provide no more than 100 questions.');
       }
       const imported = parsed.map((item, questionIndex) => {
         const q = questionIndex + 1;
@@ -536,27 +541,25 @@
       if (remove && confirm('Remove this player from the room?')) act('removePlayer', { playerId: remove.dataset.remove });
     });
     $('#remove-all-played').addEventListener('click', () => act('removeAllPlayedPlayers', {}, 'Played players removed.'));
-    $('#resolve-answer').addEventListener('click', async () => {
-      try {
-        await request('resolveAnswer', { answer: $('#override-answer').value });
-        $('#override-answer').value = '';
-        showMessage('');
-      } catch (error) { showMessage(error.message); }
-    });
-    $('#accept-match').addEventListener('click', () => act('decideMatch', { accept: true }));
-    $('#reject-match').addEventListener('click', () => act('decideMatch', { accept: false }));
-    $('#typo-toggle').addEventListener('click', () => {
-      act('setTypoTolerance', { enabled: !current.typoToleranceEnabled });
-    });
-    $('#override-answer').addEventListener('input', () => {
+    $('#answer-board').addEventListener('click', (event) => {
+      const tile = event.target.closest('[data-reveal-answer]');
+      if (!tile) return;
+      const index = Number(tile.dataset.revealAnswer);
       const question = current?.session?.question;
-      $('#resolve-answer').disabled = !question || !['playing', 'steal'].includes(question.status) || (!question.submission && !$('#override-answer').value.trim());
+      if (question?.revealed.includes(index) || question?.status === 'ended') {
+        tile.classList.remove('click-feedback');
+        void tile.offsetWidth;
+        tile.classList.add('click-feedback');
+        window.setTimeout(() => tile.classList.remove('click-feedback'), 450);
+        return;
+      }
+      act('revealAnswer', { index });
     });
-    $('#clear-submission').addEventListener('click', () => act('clearSubmission'));
     $('#add-strike').addEventListener('click', () => act('addStrike'));
     $('#pass-control').addEventListener('click', () => act('passControl'));
     $('#skip-timer').addEventListener('click', () => act('skipTimer'));
     $('#next-question').addEventListener('click', () => act('nextQuestion'));
+    $('#show-final-score').addEventListener('click', () => act('showFinalScore'));
     $('#copy-link').addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText($('#join-url').href);
@@ -932,7 +935,9 @@
   window.addEventListener('hashchange', renderRoute);
   const initialHost = hostSaved();
   const initialPlayer = playerSaved();
-  if (initialHost.code && initialHost.token) {
+  if (hashRoute().route === 'presentation') {
+    renderRoute();
+  } else if (initialHost.code && initialHost.token) {
     $('#host-reconnecting').hidden = false;
     $('#create-room').disabled = true;
     $('#create-room').hidden = true;

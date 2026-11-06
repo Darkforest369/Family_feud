@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FFF8DC">
+  <title>Family Feud</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="/presentation.js" defer></script>
+</head>
+<body class="presentation-page">
+  <main class="presentation-shell">
+    <header class="presentation-join">
+      <div class="presentation-room">
+        <p class="eyebrow">Join the game</p>
+        <div id="presentation-room-code" class="presentation-room-code">-----</div>
+        <a id="presentation-join-url" class="presentation-join-url" href="#" target="_blank" rel="noopener"></a>
+        <div class="presentation-join-actions">
+          <button id="presentation-copy-link" class="button button-light" type="button">Copy join link</button>
+          <span id="presentation-copy-status" role="status"></span>
+        </div>
+      </div>
+      <div class="presentation-qr">
+        <img id="presentation-qr-image" alt="QR code to join this game">
+        <span>Scan to join</span>
+      </div>
+    </header>
+    <div id="presentation-reconnecting" class="presentation-reconnecting" role="status" hidden>Reconnecting…</div>
+    <div id="presentation-error" class="presentation-error" role="status" hidden></div>
+    <p id="presentation-scoreline" class="presentation-scoreline">Round 0 — Blue 0 / Red 0</p>
+    <section id="presentation-game" class="presentation-game" aria-live="polite">
+      <h1 id="presentation-question" class="presentation-question">Waiting for the host to start a question</h1>
+      <div id="presentation-answer-board" class="presentation-answer-board"></div>
+    </section>
+    <section id="presentation-final" class="presentation-final" aria-live="polite" hidden>
+      <p class="eyebrow">Round complete</p>
+      <h1 id="presentation-final-score"></h1>
+      <p id="presentation-winner" class="presentation-winner"></p>
+    </section>
+  </main>
+</body>
+</html>

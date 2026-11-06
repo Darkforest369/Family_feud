@@ -64,6 +64,7 @@
             <p class="room-theme-label">Theme: <strong id="room-theme-name">Default</strong></p>
             <a id="join-url" class="join-url" href="#" target="_blank" rel="noopener"></a>
             <button id="copy-link" class="button button-light copy-link">Copy link</button>
+            <a id="presentation-link" class="button button-light copy-link" href="/presentation" target="_blank" rel="noopener">Open presentation</a>
           </div>
           <div class="qr-share">
             <img id="join-qr" alt="QR code to join this game">
@@ -98,10 +99,6 @@
                 <button id="end-session" class="button button-outline button-wide" type="button" hidden>End round</button>
                 <button id="reset-room" class="button button-quiet button-wide">Reset room</button>
               </div>
-              <div class="host-settings">
-                <p class="eyebrow">Host settings</p>
-                <button id="typo-toggle" class="button button-outline button-wide" aria-pressed="true">Typo tolerance: ON</button>
-              </div>
               <p class="small-note">Up to 10 connected players per session. Remove a finished group before inviting the next.</p>
             </section>
           </aside>
@@ -131,16 +128,7 @@
               <div id="answer-board" class="answer-board"></div>
               <div class="strike-line"><span class="eyebrow">STRIKES</span><div><span id="blue-strikes" class="strike-team"><b>BLUE</b><i>○ ○ ○</i></span><span id="red-strikes" class="strike-team"><b>RED</b><i>○ ○ ○</i></span></div></div>
               <div id="submission-box" class="submission-box" hidden>
-                <div><span class="eyebrow">TEAM SUBMISSION</span><strong id="submitted-answer">—</strong><small id="submitted-by"></small></div>
-                <button id="clear-submission" class="icon-button" title="Clear current submission" aria-label="Clear current submission">×</button>
-              </div>
-              <div id="match-confirmation" class="match-confirmation" hidden>
-                <p id="match-confirmation-copy"></p>
-                <div><button id="accept-match" class="button button-primary" type="button">Accept</button><button id="reject-match" class="button button-outline" type="button">Reject</button></div>
-              </div>
-              <div id="host-override" class="host-override">
-                <label for="override-answer">Host answer / override</label>
-                <div class="override-row"><input id="override-answer" maxlength="80" placeholder="Type what the team said"><button id="resolve-answer" class="button button-red" type="button">Resolve answer</button></div>
+                <div><span class="eyebrow">PENDING SUBMISSION</span><strong id="submitted-answer">—</strong><small id="submitted-by"></small></div>
               </div>
               <div id="round-result" class="round-result" hidden></div>
               <div class="board-controls">
@@ -148,6 +136,7 @@
                 <button id="pass-control" class="button button-outline" type="button">Pass control / steal</button>
                 <button id="skip-timer" class="button button-outline" type="button">Skip timer</button>
                 <button id="next-question" class="button button-primary" type="button" hidden>Next question →</button>
+                <button id="show-final-score" class="button button-primary" type="button" hidden>Show Final Score</button>
               </div>
             </div>
           </section>

@@ -28,6 +28,9 @@
   let publicBase = window.location.origin;
   let hasJoined = false;
   let renderedQuestionText = '';
+  let presentationTimer = null;
+  let clientClockOffset = 0;
+  let previousStrikes = { blue: 0, red: 0 };
 
   function applyTheme(themeId) {
     const id = Object.hasOwn(themeTitles, themeId) ? themeId : 'default';
@@ -56,6 +59,59 @@
     error.hidden = !message;
   }
 
+  function renderStrikes(question) {
+    const strikes = question?.strikes || { blue: 0, red: 0 };
+    ['blue', 'red'].forEach((team) => {
+      const count = Math.max(0, Math.min(3, Number(strikes[team]) || 0));
+      const element = $(`#presentation-${team}-strikes`);
+      element.setAttribute('aria-label', `${team.toUpperCase()} team: ${count} of 3 strikes`);
+      element.innerHTML = Array.from({ length: 3 }, (_, index) => {
+        const isStrike = index < count;
+        const animate = isStrike && count > previousStrikes[team] && index === count - 1;
+        return `<span class="${isStrike ? 'strike-on' : ''}${animate ? ' strike-arrive' : ''}" aria-hidden="true">${isStrike ? '×' : '○'}</span>`;
+      }).join('');
+      previousStrikes[team] = count;
+    });
+  }
+
+  function renderTurn(question) {
+    const isActive = Boolean(question && ['playing', 'steal'].includes(question.status));
+    const activeTeam = question?.activeTeam;
+    const activeTeamBanner = $('#presentation-active-team');
+    const timer = $('#presentation-timer');
+
+    document.querySelector('.score-blue').classList.toggle('is-active', isActive && activeTeam === 'blue');
+    document.querySelector('.score-blue').classList.toggle('is-inactive', isActive && activeTeam !== 'blue');
+    document.querySelector('.score-red').classList.toggle('is-active', isActive && activeTeam === 'red');
+    document.querySelector('.score-red').classList.toggle('is-inactive', isActive && activeTeam !== 'red');
+
+    activeTeamBanner.hidden = !isActive;
+    activeTeamBanner.className = `presentation-active-team${isActive ? ` ${activeTeam}` : ''}${question?.status === 'steal' ? ' steal' : ''}`;
+    activeTeamBanner.textContent = !isActive ? '' : question.status === 'steal'
+      ? `STEAL ATTEMPT: ${activeTeam.toUpperCase()} TEAM`
+      : `${activeTeam.toUpperCase()} TEAM IS ANSWERING`;
+
+    if (presentationTimer) {
+      clearInterval(presentationTimer);
+      presentationTimer = null;
+    }
+    timer.hidden = !isActive || !Number.isFinite(question.deadline);
+    if (!isActive || !Number.isFinite(question.deadline)) {
+      timer.classList.remove('urgent');
+      timer.textContent = '';
+      return;
+    }
+
+    const updateTimer = () => {
+      const remaining = Math.max(0, Math.ceil((question.deadline - (Date.now() - clientClockOffset)) / 1000));
+      timer.textContent = String(remaining);
+      timer.setAttribute('aria-label', `${remaining} seconds remaining`);
+      timer.classList.toggle('urgent', remaining < 10);
+    };
+    updateTimer();
+    presentationTimer = setInterval(updateTimer, 250);
+  }
+
   function render(state) {
     hasJoined = true;
     $('#presentation-reconnecting').hidden = true;
@@ -71,6 +127,11 @@
     $('#presentation-red-score').textContent = scores.red;
     $('#presentation-round-number').textContent = roundNumber;
 
+    const question = state.session?.question;
+    if (Number.isFinite(state.serverTime)) clientClockOffset = Date.now() - state.serverTime;
+    renderStrikes(question);
+    renderTurn(question);
+
     if (state.session?.finalScoreShown) {
       $('#presentation-game').hidden = true;
       $('#presentation-final').hidden = false;
@@ -85,7 +146,6 @@
 
     $('#presentation-final').hidden = true;
     $('#presentation-game').hidden = false;
-    const question = state.session?.question;
     const questionText = question?.text || 'Waiting for the host to start a question';
     const answerBoard = $('#presentation-answer-board');
     const isSameQuestion = renderedQuestionText === questionText;
@@ -139,14 +199,6 @@
     })
     .catch((error) => console.error(error));
 
-  $('#presentation-copy-link').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText($('#presentation-join-url').href);
-      $('#presentation-copy-status').textContent = 'Copied';
-    } catch (error) {
-      $('#presentation-copy-status').textContent = `Could not copy: ${error.message}`;
-    }
-  });
   socket.on('presentationState', render);
   socket.on('connect', () => {
     $('#presentation-reconnecting').hidden = false;

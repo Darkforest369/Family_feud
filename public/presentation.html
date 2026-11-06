@@ -17,8 +17,6 @@
         <div id="presentation-room-code" class="room-code">-----</div>
         <p class="room-theme-label">Theme: <strong id="presentation-theme-name">Default</strong></p>
         <a id="presentation-join-url" class="join-url" href="#" target="_blank" rel="noopener"></a>
-        <button id="presentation-copy-link" class="button button-light copy-link" type="button">Copy link</button>
-        <span id="presentation-copy-status" role="status"></span>
       </div>
       <div class="qr-share">
         <img id="presentation-qr-image" alt="QR code to join this game">
@@ -30,6 +28,7 @@
     <section class="score-strip presentation-scoreboard" aria-label="Round scoreboard">
       <div class="score-team score-blue">
         <span class="team-label">BLUE</span>
+        <span id="presentation-blue-strikes" class="presentation-strikes" aria-label="Blue team strikes"></span>
         <strong id="presentation-blue-score">0</strong>
       </div>
       <div class="score-center">
@@ -38,10 +37,13 @@
       </div>
       <div class="score-team score-red">
         <span class="team-label">RED</span>
+        <span id="presentation-red-strikes" class="presentation-strikes" aria-label="Red team strikes"></span>
         <strong id="presentation-red-score">0</strong>
       </div>
     </section>
     <section id="presentation-game" class="presentation-game" aria-live="polite">
+      <p id="presentation-active-team" class="presentation-active-team" hidden></p>
+      <div id="presentation-timer" class="presentation-timer" role="timer" aria-live="off" hidden></div>
       <h1 id="presentation-question" class="presentation-question">Waiting for the host to start a question</h1>
       <div id="presentation-answer-board" class="presentation-answer-board"></div>
     </section>

@@ -373,6 +373,7 @@ function presentationSnapshot(room) {
     themeId: room.themeId,
     roundScores: room.roundScores,
     sessionNumber: room.sessionNumber,
+    serverTime: Date.now(),
     session: session ? {
       number: session.number,
       status: session.status,
@@ -389,7 +390,12 @@ function presentationSnapshot(room) {
             points: revealed ? answer.points : null,
             revealedBy: revealed ? (session.question.revealedBy[index] ?? null) : null
           };
-        })
+        }),
+        status: session.question.status,
+        activeTeam: session.question.activeTeam,
+        strikes: session.question.strikes,
+        deadline: session.question.deadline,
+        stolenFrom: session.question.stolenFrom
       } : null
     } : null
   };

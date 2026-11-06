@@ -11,21 +11,18 @@
 </head>
 <body class="presentation-page">
   <main class="presentation-shell">
-    <header class="presentation-join">
-      <div class="presentation-room presentation-room-code-wrap">
-        <p class="eyebrow">Room code</p>
-        <div id="presentation-room-code" class="presentation-room-code">-----</div>
+    <header class="room-banner">
+      <div class="room-info">
+        <p class="eyebrow">Room code · share with players</p>
+        <div id="presentation-room-code" class="room-code">-----</div>
+        <p class="room-theme-label">Theme: <strong id="presentation-theme-name">Default</strong></p>
+        <a id="presentation-join-url" class="join-url" href="#" target="_blank" rel="noopener"></a>
+        <button id="presentation-copy-link" class="button button-light copy-link" type="button">Copy link</button>
+        <span id="presentation-copy-status" role="status"></span>
       </div>
-      <div class="presentation-room presentation-join-link-wrap">
-        <p class="eyebrow">Join URL</p>
-        <a id="presentation-join-url" class="presentation-join-url" href="#" target="_blank" rel="noopener"></a>
-        <div class="presentation-join-actions">
-          <button id="presentation-copy-link" class="button button-light" type="button">Copy join link</button>
-          <span id="presentation-copy-status" role="status"></span>
-        </div>
-      </div>
-      <div class="presentation-qr">
+      <div class="qr-share">
         <img id="presentation-qr-image" alt="QR code to join this game">
+        <span>Scan to join</span>
       </div>
     </header>
     <div id="presentation-reconnecting" class="presentation-reconnecting" role="status" hidden>Reconnecting…</div>

@@ -6,6 +6,11 @@
     christmas: 'Christmas Feud',
     easter: 'Easter Feud'
   };
+  const themeNames = {
+    default: 'Default',
+    christmas: 'Christmas',
+    easter: 'Easter'
+  };
   const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[character]);
@@ -33,6 +38,7 @@
     });
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--theme-bg').trim();
+    return id;
   }
 
   function updateJoinInfo(code) {
@@ -56,7 +62,8 @@
     showError('');
     roomCode = state.code;
     localStorage.setItem(presentationKey, roomCode);
-    applyTheme(state.themeId);
+    const themeId = applyTheme(state.themeId);
+    $('#presentation-theme-name').textContent = themeNames[themeId];
     updateJoinInfo(roomCode);
     const scores = state.roundScores || { blue: 0, red: 0 };
     const roundNumber = state.session?.number ?? state.sessionNumber ?? 0;

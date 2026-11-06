@@ -468,19 +468,8 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .player-game .player-scoreline { margin-bottom: 0; }
 
 .presentation-page { min-height: 100vh; background: var(--theme-bg); color: var(--theme-text); }
-.presentation-shell { display: flex; min-height: 100vh; flex-direction: column; width: min(100%, 1920px); margin: 0 auto; padding: 12px clamp(14px, 2vw, 30px) 28px; }
-.presentation-join { display: grid; min-height: 0; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: clamp(12px, 2vw, 30px); padding: 9px clamp(12px, 1.8vw, 24px); border: 1px solid var(--theme-border); border-radius: 7px; background: var(--theme-surface); color: var(--theme-text); box-shadow: 0 4px 16px rgba(20,52,38,.06); }
-.presentation-room { min-width: 0; }
-.presentation-join .eyebrow { margin-bottom: 3px; color: var(--theme-muted); font-size: .58rem; }
-.presentation-room-code { color: var(--theme-text); font-family: Georgia, serif; font-size: clamp(1.35rem, 2vw, 2rem); font-weight: 900; letter-spacing: .12em; line-height: 1; }
-.presentation-join-link-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; }
-.presentation-join-link-wrap .eyebrow { grid-column: 1 / -1; }
-.presentation-join-url { min-width: 0; overflow: hidden; color: var(--theme-text); font-size: clamp(.72rem, 1vw, .95rem); text-overflow: ellipsis; white-space: nowrap; }
-.presentation-join-actions { display: flex; align-items: center; gap: 8px; }
-.presentation-join-actions .button { min-height: 32px; padding: 5px 9px; font-size: .7rem; }
-#presentation-copy-status { color: var(--theme-muted); font-size: .7rem; font-weight: 800; }
-.presentation-qr { display: flex; flex: 0 0 auto; align-items: center; }
-.presentation-qr img { width: clamp(50px, 6vh, 68px); aspect-ratio: 1; padding: 4px; border: 1px solid var(--theme-border); border-radius: 4px; background: #FFFFFF; }
+.presentation-shell { display: flex; min-height: 100vh; flex-direction: column; width: min(1400px, 100%); margin: 0 auto; padding: 28px clamp(15px, 3vw, 38px) 28px; }
+#presentation-copy-status { color: var(--theme-primary-muted); font-size: .7rem; font-weight: 800; }
 .presentation-reconnecting { align-self: flex-end; margin-top: 12px; color: var(--theme-muted); font-size: .85rem; font-weight: 800; }
 .presentation-error { margin-top: 12px; color: var(--theme-error-text); font-size: .9rem; font-weight: 800; }
 .presentation-scoreboard { margin: clamp(12px, 2vh, 22px) 0 0; border-radius: 7px; box-shadow: 0 5px 18px rgba(20,52,38,.07); }
@@ -561,22 +550,11 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
   .answer-editor-row { grid-template-columns: minmax(0, 1fr) 58px 25px 25px 30px; gap: 4px; }
 }
 @media (max-width: 700px) {
-  .presentation-join { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; }
-  .presentation-join-link-wrap { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .presentation-join-link-wrap .eyebrow { grid-column: auto; }
-  .presentation-join-actions .button { display: none; }
-  .presentation-qr img { width: 50px; }
   .presentation-answer-board { grid-template-columns: 1fr; }
   .presentation-question { font-size: clamp(2.2rem, 7vw, 4rem); }
   .presentation-scoreboard .score-team { padding-right: 10px; padding-left: 10px; }
 }
 @media (max-width: 480px) {
-  .presentation-shell { padding: 8px; }
-  .presentation-join { gap: 8px; padding: 7px 9px; }
-  .presentation-room-code { font-size: clamp(1.1rem, 5vw, 1.5rem); }
-  .presentation-join .eyebrow { font-size: .5rem; }
-  .presentation-join-url { font-size: .65rem; }
-  .presentation-qr img { width: 42px; padding: 3px; }
   .presentation-scoreboard .score-team strong { font-size: 2rem; }
   .presentation-scoreboard .team-label { font-size: .68rem; }
   .presentation-scoreboard .score-center { min-width: 62px; font-size: .55rem; }

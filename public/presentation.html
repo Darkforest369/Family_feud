@@ -12,9 +12,12 @@
 <body class="presentation-page">
   <main class="presentation-shell">
     <header class="presentation-join">
-      <div class="presentation-room">
-        <p class="eyebrow">Join the game</p>
+      <div class="presentation-room presentation-room-code-wrap">
+        <p class="eyebrow">Room code</p>
         <div id="presentation-room-code" class="presentation-room-code">-----</div>
+      </div>
+      <div class="presentation-room presentation-join-link-wrap">
+        <p class="eyebrow">Join URL</p>
         <a id="presentation-join-url" class="presentation-join-url" href="#" target="_blank" rel="noopener"></a>
         <div class="presentation-join-actions">
           <button id="presentation-copy-link" class="button button-light" type="button">Copy join link</button>
@@ -23,20 +26,31 @@
       </div>
       <div class="presentation-qr">
         <img id="presentation-qr-image" alt="QR code to join this game">
-        <span>Scan to join</span>
       </div>
     </header>
     <div id="presentation-reconnecting" class="presentation-reconnecting" role="status" hidden>Reconnecting…</div>
     <div id="presentation-error" class="presentation-error" role="status" hidden></div>
-    <p id="presentation-scoreline" class="presentation-scoreline">Round 0 — Blue 0 / Red 0</p>
+    <section class="score-strip presentation-scoreboard" aria-label="Round scoreboard">
+      <div class="score-team score-blue">
+        <span class="team-label">BLUE</span>
+        <strong id="presentation-blue-score">0</strong>
+      </div>
+      <div class="score-center">
+        <span>ROUND</span>
+        <strong id="presentation-round-number">0</strong>
+      </div>
+      <div class="score-team score-red">
+        <span class="team-label">RED</span>
+        <strong id="presentation-red-score">0</strong>
+      </div>
+    </section>
     <section id="presentation-game" class="presentation-game" aria-live="polite">
       <h1 id="presentation-question" class="presentation-question">Waiting for the host to start a question</h1>
       <div id="presentation-answer-board" class="presentation-answer-board"></div>
     </section>
     <section id="presentation-final" class="presentation-final" aria-live="polite" hidden>
-      <p class="eyebrow">Round complete</p>
-      <h1 id="presentation-final-score"></h1>
-      <p id="presentation-winner" class="presentation-winner"></p>
+      <p class="eyebrow">Final score</p>
+      <h1 id="presentation-winner" class="presentation-winner"></h1>
     </section>
   </main>
 </body>

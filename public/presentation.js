@@ -22,6 +22,7 @@
   if (roomCode) localStorage.setItem(presentationKey, roomCode);
   let publicBase = window.location.origin;
   let hasJoined = false;
+  let renderedQuestionText = '';
 
   function applyTheme(themeId) {
     const id = Object.hasOwn(themeTitles, themeId) ? themeId : 'default';
@@ -59,33 +60,43 @@
     updateJoinInfo(roomCode);
     const scores = state.roundScores || { blue: 0, red: 0 };
     const roundNumber = state.session?.number ?? state.sessionNumber ?? 0;
-    $('#presentation-scoreline').textContent =
-      `Round ${roundNumber} — Blue ${scores.blue} / Red ${scores.red}`;
+    $('#presentation-blue-score').textContent = scores.blue;
+    $('#presentation-red-score').textContent = scores.red;
+    $('#presentation-round-number').textContent = roundNumber;
 
     if (state.session?.finalScoreShown) {
       $('#presentation-game').hidden = true;
       $('#presentation-final').hidden = false;
       const winner = scores.blue === scores.red ? 'tie' : scores.blue > scores.red ? 'blue' : 'red';
-      $('#presentation-final-score').innerHTML =
-        `Round ${roundNumber} — Final: <span class="${winner === 'blue' ? 'presentation-winner-team' : ''}">Blue ${scores.blue}</span> / <span class="${winner === 'red' ? 'presentation-winner-team' : ''}">Red ${scores.red}</span>`;
-      $('#presentation-winner').textContent = winner === 'tie'
-        ? 'The round is tied!'
-        : `${winner === 'blue' ? 'Blue' : 'Red'} wins the round!`;
+      const winnerElement = $('#presentation-winner');
+      winnerElement.className = `presentation-winner${winner === 'tie' ? '' : ` ${winner}`}`;
+      winnerElement.textContent = winner === 'tie'
+        ? 'IT’S A TIE!'
+        : `${winner.toUpperCase()} TEAM WINS!`;
       return;
     }
 
     $('#presentation-final').hidden = true;
     $('#presentation-game').hidden = false;
     const question = state.session?.question;
-    $('#presentation-question').textContent = question?.text || 'Waiting for the host to start a question';
-    $('#presentation-answer-board').innerHTML = (question?.answers || []).map((answer) => {
+    const questionText = question?.text || 'Waiting for the host to start a question';
+    const answerBoard = $('#presentation-answer-board');
+    const isSameQuestion = renderedQuestionText === questionText;
+    const previousRevealed = new Set(
+      [...answerBoard.querySelectorAll('.presentation-answer-tile.revealed')]
+        .map((tile) => tile.dataset.answerIndex)
+    );
+    $('#presentation-question').textContent = questionText;
+    renderedQuestionText = questionText;
+    answerBoard.innerHTML = (question?.answers || []).map((answer, index) => {
       const ownerClass = answer.revealedBy === 'blue' ? 'blue'
         : answer.revealedBy === 'red' ? 'red'
           : 'unmatched';
+      const animateReveal = answer.revealed && isSameQuestion && !previousRevealed.has(String(index));
       const classes = answer.revealed
-        ? `answer-tile presentation-answer-tile revealed ${ownerClass}`
+        ? `answer-tile presentation-answer-tile revealed ${ownerClass}${animateReveal ? ' presentation-reveal' : ''}`
         : 'answer-tile presentation-answer-tile';
-      return `<div class="${classes}">
+      return `<div class="${classes}" data-answer-index="${index}">
         ${answer.revealed
           ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>`
           : '<span class="presentation-answer-placeholder" aria-label="Hidden answer">?</span>'}

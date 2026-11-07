@@ -28,8 +28,6 @@
   let publicBase = window.location.origin;
   let hasJoined = false;
   let renderedQuestionText = '';
-  let presentationTimer = null;
-  let clientClockOffset = 0;
   let previousStrikes = { blue: 0, red: 0 };
 
   function applyTheme(themeId) {
@@ -78,7 +76,6 @@
     const isActive = Boolean(question && ['playing', 'steal'].includes(question.status));
     const activeTeam = question?.activeTeam;
     const activeTeamBanner = $('#presentation-active-team');
-    const timer = $('#presentation-timer');
 
     document.querySelector('.score-blue').classList.toggle('is-active', isActive && activeTeam === 'blue');
     document.querySelector('.score-blue').classList.toggle('is-inactive', isActive && activeTeam !== 'blue');
@@ -90,26 +87,6 @@
     activeTeamBanner.textContent = !isActive ? '' : question.status === 'steal'
       ? `STEAL ATTEMPT: ${activeTeam.toUpperCase()} TEAM`
       : `${activeTeam.toUpperCase()} TEAM IS ANSWERING`;
-
-    if (presentationTimer) {
-      clearInterval(presentationTimer);
-      presentationTimer = null;
-    }
-    timer.hidden = !isActive || !Number.isFinite(question.deadline);
-    if (!isActive || !Number.isFinite(question.deadline)) {
-      timer.classList.remove('urgent');
-      timer.textContent = '';
-      return;
-    }
-
-    const updateTimer = () => {
-      const remaining = Math.max(0, Math.ceil((question.deadline - (Date.now() - clientClockOffset)) / 1000));
-      timer.textContent = String(remaining);
-      timer.setAttribute('aria-label', `${remaining} seconds remaining`);
-      timer.classList.toggle('urgent', remaining < 10);
-    };
-    updateTimer();
-    presentationTimer = setInterval(updateTimer, 250);
   }
 
   function render(state) {
@@ -128,7 +105,6 @@
     $('#presentation-round-number').textContent = roundNumber;
 
     const question = state.session?.question;
-    if (Number.isFinite(state.serverTime)) clientClockOffset = Date.now() - state.serverTime;
     renderStrikes(question);
     renderTurn(question);
 
@@ -155,6 +131,12 @@
     );
     $('#presentation-question').textContent = questionText;
     renderedQuestionText = questionText;
+    const submissionBox = $('#presentation-submission');
+    submissionBox.hidden = !question?.submission;
+    submissionBox.className = `presentation-submission${question?.submission ? ` ${question.submission.team}` : ''}`;
+    submissionBox.textContent = question?.submission
+      ? `${question.submission.team.toUpperCase()} TEAM SUBMITTED: "${question.submission.text}"`
+      : '';
     answerBoard.innerHTML = (question?.answers || []).map((answer, index) => {
       const ownerClass = answer.revealedBy === 'blue' ? 'blue'
         : answer.revealedBy === 'red' ? 'red'
@@ -164,6 +146,7 @@
         ? `answer-tile presentation-answer-tile revealed ${ownerClass}${animateReveal ? ' presentation-reveal' : ''}`
         : 'answer-tile presentation-answer-tile';
       return `<div class="${classes}" data-answer-index="${index}">
+        <span class="answer-index">${index + 1}</span>
         ${answer.revealed
           ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>`
           : '<span class="presentation-answer-placeholder" aria-label="Hidden answer">?</span>'}

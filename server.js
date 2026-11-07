@@ -299,6 +299,7 @@ function hostSnapshot(room) {
       status: session.status,
       questionIndex: session.questionIndex,
       questionCount: session.questionCount,
+      finalScoreShown: Boolean(session.finalScoreShown),
       playerIds: session.playerIds,
       teams: session.teams,
       scores: room.roundScores,
@@ -314,13 +315,10 @@ function hostSnapshot(room) {
         activeTeam: session.question.activeTeam,
         status: session.question.status,
         submission: session.question.submission,
-        deadline: session.question.deadline,
-        turn: session.question.turn,
         result: session.question.result,
         awardedTeam: session.question.awardedTeam,
         stolenFrom: session.question.stolenFrom
       } : null,
-      turn: session.turn,
       message: session.message
     } : null
   };
@@ -342,10 +340,9 @@ function playerSnapshot(room, player) {
       activeTeam: current.activeTeam,
       strikes: current.strikes,
       accumulated: current.accumulated,
-      deadline: current.deadline,
+      isTyping: Boolean(current.typingPlayerId && !current.submission),
       submissionReceived: Boolean(current.submission),
       result: current.result,
-      turn: current.turn
     };
   }
   return {
@@ -394,7 +391,10 @@ function presentationSnapshot(room) {
         status: session.question.status,
         activeTeam: session.question.activeTeam,
         strikes: session.question.strikes,
-        deadline: session.question.deadline,
+        submission: session.question.submission ? {
+          team: session.question.submission.team,
+          text: session.question.submission.text
+        } : null,
         stolenFrom: session.question.stolenFrom
       } : null
     } : null
@@ -405,6 +405,10 @@ function broadcast(room) {
   const hostView = hostSnapshot(room);
   io.to(hostChannel(room.code)).emit('hostState', hostView);
   io.to(presentationChannel(room.code)).emit('presentationState', presentationSnapshot(room));
+  broadcastPlayerStates(room);
+}
+
+function broadcastPlayerStates(room) {
   for (const player of room.players.values()) {
     if (player.connected && player.socketId) {
       io.to(player.socketId).emit('playerState', playerSnapshot(room, player));
@@ -432,10 +436,6 @@ function normalizeAnswer(value) {
     .replace(/\s+/g, ' ');
 }
 
-function normalizeExactAnswer(value) {
-  return String(value || '').toLowerCase().trim().replace(/\p{P}/gu, '').replace(/\s+/g, ' ');
-}
-
 function recordSubmission(room, submission, result, points = 0, note = '') {
   const session = room.session;
   if (!session) return;
@@ -456,46 +456,18 @@ function recordSubmission(room, submission, result, points = 0, note = '') {
   });
 }
 
-function clearTimer(question) {
-  if (question.timer) clearTimeout(question.timer);
-  question.timer = null;
-}
-
 function finishQuestion(room, awardTeam, result) {
   const session = room.session;
   const question = session.question;
-  clearTimer(question);
   question.status = 'ended';
-  question.deadline = null;
+  question.submission = null;
+  question.typingPlayerId = null;
   question.result = result;
   question.awardedTeam = awardTeam;
   if (awardTeam) room.roundScores[awardTeam] += question.accumulated;
   session.completedQuestions += 1;
   session.status = 'question-ended';
   session.message = result;
-}
-
-function startTimer(room, seconds, mode) {
-  const question = room.session.question;
-  clearTimer(question);
-  question.turn = mode;
-  question.deadline = Date.now() + seconds * 1000;
-  question.timer = setTimeout(() => {
-    const latest = rooms.get(room.code)?.session?.question;
-    if (!latest || latest !== question || latest.status === 'ended') return;
-    if (latest.status === 'steal') {
-      failSteal(room, 'Time expired. The original team keeps the points.', 'Timed out');
-    } else {
-      recordSubmission(room, latest.submission || {
-        text: '',
-        team: latest.activeTeam,
-        playerName: '—',
-        submittedAt: Date.now()
-      }, 'Timed out');
-      applyStrike(room, 'Time expired.');
-    }
-    broadcast(room);
-  }, seconds * 1000);
 }
 
 function beginSteal(room) {
@@ -507,8 +479,8 @@ function beginSteal(room) {
   question.stolenFrom = question.activeTeam;
   question.activeTeam = question.activeTeam === 'blue' ? 'red' : 'blue';
   question.submission = null;
+  question.typingPlayerId = null;
   question.stealSubmitted = false;
-  startTimer(room, 45, 'steal');
 }
 
 function revealUnclaimedAnswers(question) {
@@ -523,14 +495,6 @@ function revealUnclaimedAnswers(question) {
 function failSteal(room, result = 'The steal was missed. The original team keeps the points.', submissionResult = 'Failed steal') {
   const question = room.session.question;
   if (question.submission) recordSubmission(room, question.submission, submissionResult);
-  else if (submissionResult === 'Timed out') {
-    recordSubmission(room, {
-      text: '',
-      team: question.activeTeam,
-      playerName: '—',
-      submittedAt: Date.now()
-    }, submissionResult);
-  }
   revealUnclaimedAnswers(question);
   finishQuestion(room, question.stolenFrom, result);
 }
@@ -539,11 +503,10 @@ function applyStrike(room, note = 'Strike added.') {
   const question = room.session.question;
   question.strikes[question.activeTeam] += 1;
   question.submission = null;
+  question.typingPlayerId = null;
   question.result = note;
   if (question.strikes[question.activeTeam] >= 3) {
     beginSteal(room);
-  } else {
-    startTimer(room, 60, 'answer');
   }
 }
 
@@ -556,6 +519,7 @@ function awardMatch(room, submission, index) {
   question.revealedBy[index] = question.activeTeam;
   question.accumulated += answer.points;
   question.submission = null;
+  question.typingPlayerId = null;
   if (question.status === 'steal') {
     revealUnclaimedAnswers(question);
     finishQuestion(room, question.activeTeam, `${answer.text} is correct. ${question.activeTeam === 'blue' ? 'Blue' : 'Red'} steals ${question.accumulated} points.`);
@@ -564,8 +528,6 @@ function awardMatch(room, submission, index) {
   question.result = `${answer.text} is correct for ${answer.points} points.`;
   if (question.revealed.length === question.answers.length) {
     finishQuestion(room, question.activeTeam, 'All answers revealed. Points awarded.');
-  } else {
-    startTimer(room, 60, 'answer');
   }
 }
 
@@ -586,10 +548,8 @@ function initializeQuestion(room, index) {
     activeTeam: startingTeam,
     status: 'playing',
     submission: null,
+    typingPlayerId: null,
     stealSubmitted: false,
-    deadline: null,
-    timer: null,
-    turn: 'answer',
     result: '',
     stolenFrom: null
   };
@@ -598,7 +558,6 @@ function initializeQuestion(room, index) {
     questionText: source.question,
     entries: []
   });
-  startTimer(room, 60, 'answer');
 }
 
 function validateQuestions(value) {
@@ -743,13 +702,32 @@ io.on('connection', (socket) => {
     if (!text.trim()) fail('Enter an answer first.');
     const submission = { text, playerName: player.name, team: player.team, submittedAt: Date.now() };
     question.submission = submission;
+    question.typingPlayerId = null;
     if (question.status === 'steal') question.stealSubmitted = true;
-    // Auto-reveal only on exact normalized match for speed. All non-exact judgment is the host's manual click; this eliminates the typo/plural confirm dialog which was too slow and error-prone at party scale.
-    const exactIndex = question.answers.findIndex((candidate, index) =>
-      !question.revealed.includes(index) &&
-      normalizeExactAnswer(candidate.text) === normalizeExactAnswer(text));
-    if (exactIndex >= 0) awardMatch(room, submission, exactIndex);
     broadcast(room);
+    return {};
+  });
+
+  respond(socket, 'answerTyping', ({ typing }) => {
+    const reference = socket.data.player;
+    const room = reference && rooms.get(reference.code);
+    const player = room?.players.get(reference.id);
+    const question = room?.session?.question;
+    if (!player || !player.connected || player.socketId !== socket.id) fail('Join the room before indicating typing.');
+    if (typeof typing !== 'boolean') fail('Typing state must be boolean.');
+    if (!typing) {
+      if (question?.typingPlayerId === player.id) {
+        question.typingPlayerId = null;
+        broadcastPlayerStates(room);
+      }
+      return {};
+    }
+    if (!question || !['playing', 'steal'].includes(question.status) ||
+        question.activeTeam !== player.team || question.submission) {
+      fail('Your team is not active right now.');
+    }
+    question.typingPlayerId = player.id;
+    broadcastPlayerStates(room);
     return {};
   });
 
@@ -758,6 +736,9 @@ io.on('connection', (socket) => {
     const room = reference && rooms.get(reference.code);
     const player = room?.players.get(reference.id);
     if (player?.socketId === socket.id) {
+      if (room.session?.question?.typingPlayerId === player.id) {
+        room.session.question.typingPlayerId = null;
+      }
       player.connected = false;
       broadcast(room);
     }
@@ -851,17 +832,6 @@ io.on('connection', (socket) => {
       }
       return {};
     }),
-    skipTimer: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
-      const question = room.session?.question;
-      if (!question || !['playing', 'steal'].includes(question.status)) fail('There is no active timer to skip.');
-      if (question.status === 'steal') {
-        failSteal(room, 'The host ended the steal timer. The original team keeps the points.', 'Timed out');
-      } else {
-        recordSubmission(room, question.submission || { team: question.activeTeam, playerName: '—', text: '', submittedAt: Date.now() }, 'Timed out');
-        applyStrike(room, 'The host skipped the timer.');
-      }
-      return {};
-    }),
     passControl: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
       if (!room.session?.question || room.session.question.status !== 'playing') fail('Control can only pass during a regular turn.');
       beginSteal(room);
@@ -892,7 +862,6 @@ io.on('connection', (socket) => {
       const session = room.session;
       if (!session) fail('There is no active session.');
       if (session.question) {
-        clearTimer(session.question);
         if (session.question.submission) {
           recordSubmission(room, session.question.submission, 'Wrong', 0, 'Session ended before resolution.');
         }
@@ -951,7 +920,6 @@ io.on('connection', (socket) => {
       return {};
     }),
     resetRoom: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
-      if (room.session?.question?.timer) clearTimer(room.session.question);
       for (const player of room.players.values()) {
         if (player.connected) io.to(player.socketId).emit('playerRemoved', 'The host reset the room.');
       }
@@ -973,6 +941,9 @@ io.on('connection', (socket) => {
     const room = reference && rooms.get(reference.code);
     const player = room?.players.get(reference.id);
     if (player?.socketId === socket.id) {
+      if (room.session?.question?.typingPlayerId === player.id) {
+        room.session.question.typingPlayerId = null;
+      }
       player.connected = false;
       broadcast(room);
     }

@@ -73,9 +73,6 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[character]);
   const clone = (value) => JSON.parse(JSON.stringify(value));
-  const countdown = (deadline, element) => {
-    element.textContent = deadline ? String(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))) : '0';
-  };
   const setConnection = (element, online) => {
     element.classList.toggle('is-online', online);
     element.innerHTML = `<i></i> ${online ? 'Connected' : 'Reconnecting…'}`;
@@ -142,7 +139,6 @@
   const host = (() => {
     let current = null;
     let editorQuestions = [];
-    let timerInterval = null;
     const connection = $('#connection-status');
 
     function showMessage(text, target) {
@@ -235,6 +231,7 @@
       const ready = session?.status === 'ready';
       const question = session?.question;
       const activeGame = Boolean(question && ['playing', 'steal'].includes(question.status));
+      const finalScoreShown = Boolean(session?.finalScoreShown);
       $('#start-session').hidden = Boolean(session);
       $('#start-session').disabled = current.players.filter((player) => player.waiting && player.connected).length < 4;
       $('#start-question').hidden = !ready;
@@ -242,15 +239,13 @@
       $('#question-editor-open').title = session ? 'End the session before editing questions' : '';
       $('#end-session').hidden = !session;
       $('#ready-view').hidden = Boolean(question);
-      $('#board-view').hidden = !question || session?.status === 'complete';
+      $('#board-view').hidden = !question || (session?.status === 'complete' && !finalScoreShown);
       $('#final-score').hidden = session?.status !== 'complete';
+      $('#round-complete-note').hidden = !finalScoreShown;
       if (session?.status === 'complete') {
         $('#final-copy').textContent = `Round ${session.number} finished ${session.scores.blue}–${session.scores.red}.`;
       }
-      if (!question) {
-        if (timerInterval) clearInterval(timerInterval);
-        return;
-      }
+      if (!question) return;
 
       $('#question-number').textContent = `QUESTION ${session.questionIndex + 1} OF ${session.questionCount}`;
       $('#question-text').textContent = question.text;
@@ -266,7 +261,7 @@
         const classes = `answer-tile host-answer-tile${revealed ? ` revealed ${ownerClass}` : ''}`;
         const indicator = revealed ? '✓' : '✗';
         return `<button class="${classes}" type="button" data-reveal-answer="${index}" aria-label="${revealed ? 'Revealed' : 'Unrevealed'} answer ${index + 1}: ${escape(answer.text)}, ${answer.points} points">
-          <span class="answer-index">${String(index + 1).padStart(2, '0')}</span>
+          <span class="answer-index">${index + 1}</span>
           <span class="answer-state ${revealed ? 'is-revealed' : 'is-hidden'}" aria-hidden="true">${indicator}</span>
           <span class="answer-copy">${escape(answer.text)}</span>
           <span class="answer-points">${answer.points}</span>
@@ -278,25 +273,19 @@
         element.querySelector('i').innerHTML = Array.from({ length: 3 }, (_, index) => `<span class="${index < question.strikes[team] ? 'strike-on' : ''}">${index < question.strikes[team] ? '×' : '○'}</span>`).join(' ');
       });
       $('#submission-box').hidden = !question.submission || !activeGame;
+      $('#submission-box').className = `submission-box${question.submission ? ` ${question.submission.team}` : ''}`;
       if (question.submission) {
         $('#submitted-answer').textContent = question.submission.text;
-        $('#submitted-by').textContent = `Submitted by ${question.submission.playerName}`;
+        $('#submitted-by').textContent = `${question.submission.team.toUpperCase()} TEAM · Submitted by ${question.submission.playerName}`;
       }
       $('#add-strike').hidden = !activeGame;
       $('#add-strike').textContent = question.status === 'steal' ? 'Fail Steal' : 'Add Strike';
-      $('#pass-control').hidden = !activeGame || question.status === 'steal';
-      $('#skip-timer').hidden = !activeGame;
+      $('#pass-control').hidden = !activeGame || question.status === 'steal' || Boolean(question.submission);
       const isLastQuestion = session.questionIndex === session.questionCount - 1;
       $('#next-question').hidden = question.status !== 'ended' || isLastQuestion;
-      $('#show-final-score').hidden = question.status !== 'ended' || !isLastQuestion;
+      $('#show-final-score').hidden = finalScoreShown || question.status !== 'ended' || !isLastQuestion;
       $('#round-result').hidden = !question.result;
       $('#round-result').textContent = question.result || '';
-      countdown(question.deadline, $('#timer'));
-      if (timerInterval) clearInterval(timerInterval);
-      timerInterval = setInterval(() => {
-        const liveQuestion = current?.session?.question;
-        if (liveQuestion?.deadline) countdown(liveQuestion.deadline, $('#timer'));
-      }, 250);
     }
 
     function renderLogGroups(sessions, openLatest = false) {
@@ -460,7 +449,7 @@
       return imported;
     }
 
-    async function importQuestionText(text) {
+    function importQuestionText(text) {
       const imported = parseImportedQuestions(text);
       editorQuestions = imported;
       renderEditor();
@@ -557,7 +546,6 @@
     });
     $('#add-strike').addEventListener('click', () => act('addStrike'));
     $('#pass-control').addEventListener('click', () => act('passControl'));
-    $('#skip-timer').addEventListener('click', () => act('skipTimer'));
     $('#next-question').addEventListener('click', () => act('nextQuestion'));
     $('#show-final-score').addEventListener('click', () => act('showFinalScore'));
     $('#copy-link').addEventListener('click', async () => {
@@ -678,33 +666,54 @@
       }
     });
     $('#download-export').addEventListener('click', () => {
+      let downloadUrl = '';
+      const link = document.createElement('a');
       try {
-        const payload = $('#export-json').value;
-        const file = new Blob([payload], { type: 'application/json' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(file);
-        const themeId = getTheme(current.themeId).id;
-        const themeTitle = THEMES[themeId].title || 'family-feud';
-        const cleanTitle = themeTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'family-feud';
-        const dateStamp = new Date().toISOString().slice(0, 10);
-        link.download = `${cleanTitle}-questions-${dateStamp}.json`;
+        const jsonString = $('#export-json').value;
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        downloadUrl = URL.createObjectURL(blob);
+        link.href = downloadUrl;
+        link.download = 'questions.json';
         document.body.appendChild(link);
         link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
         setExportMessage('');
       } catch (error) {
         setExportMessage(error.message || 'Download failed.', true);
+      } finally {
+        link.remove();
+        if (downloadUrl) {
+          try {
+            URL.revokeObjectURL(downloadUrl);
+          } catch (error) {
+            setExportMessage(`Download cleanup failed: ${error.message}`, true);
+          }
+        }
       }
     });
     $('#import-questions').addEventListener('click', () => $('#import-file').click());
-    $('#import-file').addEventListener('change', async (event) => {
+    $('#import-file').addEventListener('change', (event) => {
       const file = event.target.files[0];
       if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          importQuestionText(typeof reader.result === 'string' ? reader.result : '');
+        } catch (error) {
+          showMessage(`Could not import JSON: ${error.message}`, $('#editor-message'));
+        } finally {
+          event.target.value = '';
+        }
+      };
+      reader.onerror = () => {
+        showMessage(`Could not read JSON file: ${reader.error?.message || 'FileReader failed.'}`, $('#editor-message'));
+        event.target.value = '';
+      };
       try {
-        await importQuestionText(await file.text());
-      } catch (error) { showMessage(`Could not import JSON: ${error.message}`, $('#editor-message')); }
-      event.target.value = '';
+        reader.readAsText(file);
+      } catch (error) {
+        showMessage(`Could not read JSON file: ${error.message}`, $('#editor-message'));
+        event.target.value = '';
+      }
     });
     $('#import-pasted').addEventListener('click', async () => {
       try {
@@ -723,9 +732,30 @@
 
   const player = (() => {
     let current = null;
-    let timerInterval = null;
+    let previousQuestionKey = '';
+    let previousTotalStrikes = null;
     let joining = false;
     const connection = $('#player-connection');
+
+    function updateStrikeFlash(question) {
+      const team = current?.player.team;
+      const questionKey = question ? `${current.session.number}:${current.session.questionIndex}` : '';
+      const strikes = team && questionKey
+        ? (Number(question.strikes?.blue) || 0) + (Number(question.strikes?.red) || 0)
+        : null;
+      if (questionKey !== previousQuestionKey) {
+        previousQuestionKey = questionKey;
+        previousTotalStrikes = strikes;
+        return;
+      }
+      if (strikes !== null && previousTotalStrikes !== null && strikes > previousTotalStrikes) {
+        const flash = $('#strike-flash');
+        flash.classList.remove('strike-flash-active');
+        void flash.offsetWidth;
+        flash.classList.add('strike-flash-active');
+      }
+      previousTotalStrikes = strikes;
+    }
 
     function showError(text) {
       const target = $('#player-view').hidden ? $('#join-error') : $('#player-notice');
@@ -775,6 +805,7 @@
       $('#game-red').textContent = roundScores.red;
 
       const question = current.session?.question;
+      updateStrikeFlash(question);
       const assigned = Boolean(current.player.team);
       const inSession = assigned && current.session?.teams?.[current.player.team]?.includes(current.player.id);
       const shouldWait = !current.session || !inSession || !question;
@@ -792,10 +823,7 @@
       waitingTeam.hidden = !assigned;
       waitingTeam.className = `waiting-team ${current.player.team || ''}`;
       waitingTeam.textContent = assigned ? `${current.player.team.toUpperCase()} TEAM` : '';
-      if (shouldWait) {
-        if (timerInterval) clearInterval(timerInterval);
-        return;
-      }
+      if (shouldWait) return;
 
       $('#team-badge').className = `team-badge ${current.player.team}`;
       $('#team-badge').textContent = `${current.player.team.toUpperCase()} TEAM`;
@@ -814,14 +842,23 @@
       } else if (isActive) {
         status.textContent = hasSubmission ? 'Answer submitted. Your team is locked in.' : 'Your team is active — discuss and submit one answer.';
       } else {
-        status.textContent = question.status === 'steal' ? 'The other team is making its steal attempt.' : `${question.activeTeam.toUpperCase()} team is answering. Discuss together.`;
+        if (hasSubmission || question.isTyping) {
+          status.textContent = `${question.activeTeam.toUpperCase()} is typing`;
+          const ellipsis = document.createElement('span');
+          ellipsis.className = 'typing-ellipsis';
+          ellipsis.setAttribute('aria-hidden', 'true');
+          ellipsis.innerHTML = '<i>.</i><i>.</i><i>.</i>';
+          status.append(ellipsis);
+        } else {
+          status.textContent = question.status === 'steal' ? 'The other team is making its steal attempt.' : `${question.activeTeam.toUpperCase()} team is answering. Discuss together.`;
+        }
         status.classList.add('inactive');
       }
       $('#player-answer-board').innerHTML = question.board.map((answer, index) => {
         const owner = answer.revealedBy || null;
         const ownerClass = owner === 'blue' ? 'blue' : owner === 'red' ? 'red' : 'unmatched';
         const classes = answer.revealed ? `answer-tile revealed ${ownerClass}` : 'answer-tile';
-        return `<div class="${classes}"><span class="answer-index">${String(index + 1).padStart(2, '0')}</span>${answer.revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`;
+        return `<div class="${classes}"><span class="answer-index">${index + 1}</span>${answer.revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`;
       }).join('');
       const canSubmit = isActive && !hasSubmission;
       $('#answer-form').hidden = !canSubmit;
@@ -832,9 +869,6 @@
         const strikes = question.strikes[current.player.team] || 0;
         result.textContent = `${question.result} ${strikes} strike${strikes === 1 ? '' : 's'} for your team. Question points: ${question.accumulated}.`;
       }
-      countdown(question.deadline, $('#player-timer'));
-      if (timerInterval) clearInterval(timerInterval);
-      timerInterval = setInterval(() => countdown(question.deadline, $('#player-timer')), 250);
     }
 
     function reconnect() {
@@ -859,6 +893,11 @@
     });
     $('#room-input').addEventListener('input', (event) => {
       event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+    });
+    $('#answer-input').addEventListener('input', (event) => {
+      socket.emit('answerTyping', { typing: Boolean(event.target.value) }, (result) => {
+        if (!result?.ok) showError(result?.error || 'Typing status could not be updated.');
+      });
     });
     $('#answer-form').addEventListener('submit', (event) => {
       event.preventDefault();

@@ -826,7 +826,7 @@
   const player = (() => {
     let current = null;
     let previousQuestionKey = '';
-    let previousTotalStrikes = null;
+    let previousStrikes = null;
     let joining = false;
     let preview = null;
     let previewMode = false;
@@ -835,21 +835,24 @@
     function updateStrikeFlash(question) {
       const team = current?.player.team;
       const questionKey = question ? `${current.session.number}:${current.session.questionIndex}` : '';
-      const strikes = team && questionKey
-        ? (Number(question.strikes?.blue) || 0) + (Number(question.strikes?.red) || 0)
+      const strikes = question && questionKey
+        ? {
+          blue: Number(question.strikes?.blue) || 0,
+          red: Number(question.strikes?.red) || 0
+        }
         : null;
       if (questionKey !== previousQuestionKey) {
         previousQuestionKey = questionKey;
-        previousTotalStrikes = strikes;
+        previousStrikes = strikes;
         return;
       }
-      if (strikes !== null && previousTotalStrikes !== null && strikes > previousTotalStrikes) {
+      if (team && strikes && previousStrikes && strikes[team] > previousStrikes[team]) {
         const flash = $('#strike-flash');
         flash.classList.remove('strike-flash-active');
         void flash.offsetWidth;
         flash.classList.add('strike-flash-active');
       }
-      previousTotalStrikes = strikes;
+      previousStrikes = strikes;
     }
 
     function showError(text) {
@@ -932,25 +935,18 @@
       const status = get('player-turn-status');
       status.className = 'player-turn-status';
       if (question.status === 'ended') {
-        status.textContent = 'Question complete. All answers are now revealed.';
-        status.classList.add('inactive');
+        const winner = question.awardedTeam || question.activeTeam;
+        const winningTeam = winner === 'blue' ? 'Blue Team' : 'Red Team';
+        status.textContent = `${winningTeam} wins this question, gaining ${question.accumulated} points`;
+      } else if (question.status === 'steal' && !isActive) {
+        status.textContent = 'Opposing Team Stealing';
       } else if (question.status === 'steal' && isActive) {
         status.textContent = hasSubmission ? 'Steal answer submitted. The host is resolving it.' : 'Your team has the steal: discuss and submit one answer.';
         status.classList.add('steal');
       } else if (isActive) {
         status.textContent = hasSubmission ? 'Answer submitted. Your team is locked in.' : 'Your team is active — discuss and submit one answer.';
       } else {
-        if (hasSubmission || question.isTyping) {
-          status.textContent = `${question.activeTeam.toUpperCase()} is typing`;
-          const ellipsis = document.createElement('span');
-          ellipsis.className = 'typing-ellipsis';
-          ellipsis.setAttribute('aria-hidden', 'true');
-          ellipsis.innerHTML = '<i>.</i><i>.</i><i>.</i>';
-          status.append(ellipsis);
-        } else {
-          status.textContent = question.status === 'steal' ? 'The other team is making its steal attempt.' : `${question.activeTeam.toUpperCase()} team is answering. Discuss together.`;
-        }
-        status.classList.add('inactive');
+        status.textContent = `Question Points: ${question.accumulated}`;
       }
       get('player-answer-board').innerHTML = question.board.map((answer, index) => {
         const owner = answer.revealedBy || null;
@@ -962,7 +958,8 @@
       get('answer-form').hidden = !canSubmit;
       get('answer-locked').hidden = !(isActive && hasSubmission && question.status !== 'ended');
       const result = get('player-result');
-      result.hidden = !question.result;
+      result.hidden = !question.result ||
+        (question.status !== 'ended' && (!isActive || question.status === 'steal'));
       if (question.result) {
         const strikes = question.strikes[state.player.team] || 0;
         result.textContent = `${question.result} ${strikes} strike${strikes === 1 ? '' : 's'} for your team. Question points: ${question.accumulated}.`;

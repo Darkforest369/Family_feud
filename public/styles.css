@@ -470,7 +470,6 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .team-badge.red { border-left: 4px solid var(--team-red); }
 .player-question { margin: 5px 0 13px; font-size: clamp(1.85rem, 8vw, 2.65rem); line-height: 1.04; }
 .player-turn-status { margin-bottom: 14px; padding: 11px 12px; border-left: 3px solid var(--theme-primary); background: var(--theme-positive-bg); color: var(--theme-positive-text); font-size: .8rem; font-weight: 800; line-height: 1.45; }
-.player-turn-status.inactive { border-color: var(--theme-neutral-border); background: var(--theme-neutral-bg); color: var(--theme-neutral-text); font-family: "Times New Roman", Times, serif; font-size: .95rem; font-weight: 700; }
 .player-turn-status.steal { border-color: var(--team-red); background: var(--red-light); color: var(--team-red-text); }
 .typing-ellipsis { display: inline-flex; margin-left: .12em; }
 .typing-ellipsis i { opacity: 1; font-style: normal; }
@@ -518,7 +517,7 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .presentation-active-team.blue { color: var(--team-blue); text-shadow: 0 0 18px var(--team-blue-bg); }
 .presentation-active-team.red { color: var(--team-red); text-shadow: 0 0 18px var(--team-red-bg); }
 .presentation-active-team.steal { text-decoration: underline; text-decoration-thickness: .12em; text-underline-offset: .18em; }
-.presentation-question { flex: 0 1 auto; max-width: 100%; max-height: 24vh; min-height: 0; margin: 0 0 clamp(4px, .8vh, 9px); overflow: hidden; font-family: "Times New Roman", Times, serif; font-size: clamp(1rem, 3.8vh, 3rem); font-weight: 800; line-height: 1.03; text-align: center; overflow-wrap: anywhere; }
+.presentation-question { flex: 0 1 auto; max-width: 100%; max-height: 28vh; min-height: 0; margin: 0 0 clamp(4px, .8vh, 9px); overflow: hidden; font-family: "Times New Roman", Times, serif; font-size: clamp(2rem, 7vw, 8rem); font-weight: 800; line-height: 1.03; text-align: center; overflow-wrap: break-word; text-wrap: balance; }
 .presentation-submission { flex: 0 0 auto; width: 100%; min-width: 0; margin: 0 0 clamp(5px, 1vh, 12px); overflow: hidden; border: 2px solid var(--theme-border-strong); border-radius: 8px; padding: clamp(7px, 1.2vh, 13px) clamp(10px, 1.5vw, 20px); background: var(--theme-surface-alt); color: var(--theme-text); font-size: clamp(.78rem, 1.8vh, 1.35rem); font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
 .presentation-submission.blue { border-color: var(--team-blue); background: var(--team-blue-bg); color: var(--team-blue-text); }
 .presentation-submission.red { border-color: var(--team-red); background: var(--team-red-bg); color: var(--team-red-text); }

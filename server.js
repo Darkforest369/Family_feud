@@ -344,6 +344,7 @@ function playerSnapshot(room, player, readOnly = false) {
       activeTeam: current.activeTeam,
       strikes: current.strikes,
       accumulated: current.accumulated,
+      awardedTeam: current.awardedTeam,
       isTyping: Boolean(current.typingPlayerId && !current.submission),
       submissionReceived: Boolean(current.submission),
       result: current.result,

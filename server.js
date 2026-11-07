@@ -317,6 +317,7 @@ function hostSnapshot(room) {
         activeTeam: session.question.activeTeam,
         status: session.question.status,
         submission: session.question.submission,
+        isTyping: Boolean(session.question.typingPlayerId && !session.question.submission),
         result: session.question.result,
         awardedTeam: session.question.awardedTeam,
         stolenFrom: session.question.stolenFrom
@@ -404,10 +405,13 @@ function presentationSnapshot(room) {
 }
 
 function broadcast(room) {
-  const hostView = hostSnapshot(room);
-  io.to(hostChannel(room.code)).emit('hostState', hostView);
+  broadcastHostState(room);
   io.to(presentationChannel(room.code)).emit('presentationState', presentationSnapshot(room));
   broadcastPlayerStates(room);
+}
+
+function broadcastHostState(room) {
+  io.to(hostChannel(room.code)).emit('hostState', hostSnapshot(room));
 }
 
 function broadcastPlayerStates(room) {
@@ -726,6 +730,7 @@ io.on('connection', (socket) => {
       if (question?.typingPlayerId === player.id) {
         question.typingPlayerId = null;
         broadcastPlayerStates(room);
+        broadcastHostState(room);
       }
       return {};
     }
@@ -735,6 +740,7 @@ io.on('connection', (socket) => {
     }
     question.typingPlayerId = player.id;
     broadcastPlayerStates(room);
+    broadcastHostState(room);
     return {};
   });
 

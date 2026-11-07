@@ -24,8 +24,8 @@
   --theme-answer-index: #526179;
   --theme-answer-hidden: #D8E0D5;
   --answer-unmatched: #2F7A51;
-  --answer-unmatched-text: #FFFFFF;
-  --answer-unmatched-bg: rgba(20, 66, 34, .92);
+  --answer-unmatched-text: #24543A;
+  --answer-unmatched-bg: rgba(47, 122, 81, .16);
   --team-blue: #2E7DD1;
   --team-blue-text: #174879;
   --team-blue-bg: #DCEEFF;
@@ -96,9 +96,9 @@
   --theme-positive-text: #E7F0E9;
   --theme-answer-index: #BED0C3;
   --theme-answer-hidden: #547060;
-  --answer-unmatched: #245B37;
-  --answer-unmatched-text: #FFFFFF;
-  --answer-unmatched-bg: rgba(20, 66, 34, .8);
+  --answer-unmatched: #6DBB82;
+  --answer-unmatched-text: #E7F0E9;
+  --answer-unmatched-bg: rgba(36, 91, 55, .4);
   --team-blue: #2E7DD1;
   --team-blue-text: #EAF4FF;
   --team-blue-bg: #1E558A;
@@ -144,8 +144,8 @@
   --theme-answer-index: #586579;
   --theme-answer-hidden: #D8E0D5;
   --answer-unmatched: #28683A;
-  --answer-unmatched-text: #FFFFFF;
-  --answer-unmatched-bg: rgba(20, 66, 34, .92);
+  --answer-unmatched-text: #24543A;
+  --answer-unmatched-bg: rgba(40, 104, 58, .16);
   --team-blue: #64B5F6;
   --team-blue-text: #163C5B;
   --team-blue-bg: #D9EEFC;
@@ -430,6 +430,13 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 22px; border-top: 1px solid var(--line); background: var(--theme-surface-alt); }
 .editor-footer span { color: var(--muted); font-size: .72rem; line-height: 1.4; }
 .editor-dialog > .message { margin: 10px 22px 0; }
+.player-preview-dialog { position: relative; display: flex; width: min(680px, 100%); max-height: min(92vh, 900px); flex-direction: column; overflow: auto; border-radius: 7px; background: var(--paper); box-shadow: 0 25px 80px rgba(0,0,0,.24); }
+.player-preview-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 13px; border-bottom: 1px solid var(--line); }
+.player-preview-header h2 { margin: 0; font-size: 1.5rem; }
+.player-preview-controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 13px 22px 0; }
+.player-preview-controls [aria-pressed="true"] { border-color: var(--theme-accent); background: var(--theme-accent-soft); color: var(--theme-accent-text); }
+.player-preview-container { padding: 14px 22px 22px; }
+.player-preview-screen { display: block; width: min(460px, 100%); margin: 0 auto; }
 
 .play-page { min-height: 100vh; background: var(--theme-bg); background-image: repeating-linear-gradient(135deg, transparent 0 82px, rgba(23,74,56,.025) 82px 84px); color: var(--theme-text); }
 .play-main { width: min(620px, 100%); margin: 0 auto; padding: 27px 16px 45px; }
@@ -514,8 +521,8 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .presentation-submission { flex: 0 0 auto; width: 100%; min-width: 0; margin: 0 0 clamp(5px, 1vh, 12px); overflow: hidden; border: 2px solid var(--theme-border-strong); border-radius: 8px; padding: clamp(7px, 1.2vh, 13px) clamp(10px, 1.5vw, 20px); background: var(--theme-surface-alt); color: var(--theme-text); font-size: clamp(.78rem, 1.8vh, 1.35rem); font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
 .presentation-submission.blue { border-color: var(--team-blue); background: var(--team-blue-bg); color: var(--team-blue-text); }
 .presentation-submission.red { border-color: var(--team-red); background: var(--team-red-bg); color: var(--team-red-text); }
-.presentation-answer-board { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); align-content: stretch; gap: clamp(4px, 1vh, 12px); overflow: hidden; }
-.presentation-answer-tile { --presentation-reveal-bg: var(--theme-positive-bg); --presentation-reveal-border: var(--theme-positive-border); --presentation-reveal-text: var(--theme-positive-text); display: grid; min-height: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-items: center; gap: clamp(4px, .8vh, 10px); overflow: hidden; padding: clamp(16px, 2.1vh, 27px) clamp(6px, 1vw, 16px) clamp(4px, .8vh, 10px); border: 2px solid var(--theme-border-strong); border-radius: 10px; background: var(--presentation-tile-bg, rgba(46,64,87,.1)); box-shadow: 0 7px 18px rgba(20,52,38,.1); color: var(--theme-text); text-align: center; transition: background-color .3s ease, border-color .3s ease, color .3s ease, box-shadow .3s ease; }
+.presentation-answer-board { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: clamp(68px, 14vh, 150px); align-content: start; gap: clamp(4px, 1vh, 12px); overflow: hidden; }
+.presentation-answer-tile { --presentation-reveal-bg: var(--theme-positive-bg); --presentation-reveal-border: var(--theme-positive-border); --presentation-reveal-text: var(--theme-positive-text); display: grid; min-height: 0; max-height: 150px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-items: center; gap: clamp(4px, .8vh, 10px); overflow: hidden; padding: clamp(6px, 1vh, 14px) clamp(6px, 1vw, 16px); border: 2px solid var(--theme-border-strong); border-radius: 10px; background: var(--presentation-tile-bg, rgba(46,64,87,.1)); box-shadow: 0 7px 18px rgba(20,52,38,.1); color: var(--theme-text); text-align: center; transition: background-color .3s ease, border-color .3s ease, color .3s ease, box-shadow .3s ease; }
 .answer-tile.presentation-answer-tile.revealed.blue { --presentation-reveal-bg: var(--team-blue-bg); --presentation-reveal-border: var(--team-blue); --presentation-reveal-text: var(--team-blue-text); }
 .answer-tile.presentation-answer-tile.revealed.red { --presentation-reveal-bg: var(--team-red-bg); --presentation-reveal-border: var(--team-red); --presentation-reveal-text: var(--team-red-text); }
 .answer-tile.presentation-answer-tile.revealed.unmatched { --presentation-reveal-bg: var(--answer-unmatched-bg); --presentation-reveal-border: var(--answer-unmatched); --presentation-reveal-text: var(--answer-unmatched-text); }
@@ -586,6 +593,10 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 @media (max-width: 700px) {
   .presentation-answer-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .presentation-scoreboard .score-team { padding-right: 10px; padding-left: 10px; }
+}
+@media (max-width: 520px) {
+  .player-preview-header { padding-right: 14px; padding-left: 14px; }
+  .player-preview-controls, .player-preview-container { padding-right: 14px; padding-left: 14px; }
 }
 @media (max-width: 480px) {
   .presentation-scoreboard .score-team strong { font-size: 2rem; }

@@ -94,14 +94,15 @@
               <div class="section-heading"><div><p class="eyebrow">The room</p><h2>Players <span id="players-heading-count">0</span></h2></div></div>
               <div id="players-list" class="players-list"></div>
               <div class="sidebar-actions">
-                <button id="start-session" class="button button-primary button-wide">Start session</button>
+                <button id="start-session" class="button button-primary button-wide">Start round</button>
+                <button id="preview-player-screen" class="button button-outline button-wide" type="button" hidden>Preview Player Screen</button>
                 <button id="start-question" class="button button-dark button-wide" hidden>Start first question</button>
                 <button id="question-editor-open" class="button button-outline button-wide">Question editor</button>
                 <button id="remove-all-played" class="button button-outline button-wide" hidden>Remove all played players</button>
                 <button id="end-session" class="button button-outline button-wide" type="button" hidden>End round</button>
                 <button id="reset-room" class="button button-quiet button-wide">Reset room</button>
               </div>
-              <p class="small-note">Up to 10 connected players per session. Remove a finished group before inviting the next.</p>
+              <p class="small-note">Up to 10 connected players per round. Remove a finished group before inviting the next.</p>
             </section>
           </aside>
           <section class="game-area">
@@ -109,7 +110,7 @@
               <div class="ready-ornament" aria-hidden="true">✳</div>
               <p class="eyebrow">Ready when you are</p>
               <h2>Set the teams.<br>Start the fun.</h2>
-              <p>Create a session when at least four players are waiting. Odd players and extras stay in the room for the next round.</p>
+              <p>Start a round when at least four players are waiting. Odd players and extras stay in the room for the next round.</p>
             </div>
             <div id="board-view" class="panel board-view" hidden>
               <div class="board-topline"><span id="question-number" class="eyebrow">QUESTION 1</span><span id="board-mode" class="mode-tag">REGULAR TURN</span></div>
@@ -147,9 +148,9 @@
           </section>
         </div>
         <section id="final-score" class="final-score panel" hidden>
-          <p class="eyebrow">Session complete</p><h2><span data-theme-title>Family Feud</span> — That’s a wrap.</h2>
+          <p class="eyebrow">Round complete</p><h2><span data-theme-title>Family Feud</span> — That’s a wrap.</h2>
           <p id="final-copy"></p>
-          <div id="summary-submission-log" class="summary-submission-log" aria-label="Session submission log"></div>
+          <div id="summary-submission-log" class="summary-submission-log" aria-label="Round submission log"></div>
         </section>
         <section id="submission-log-panel" class="submission-log-panel panel" hidden>
           <div class="section-heading"><div><p class="eyebrow">Host only</p><h2>Submission log</h2></div></div>
@@ -179,6 +180,20 @@
           <div class="export-actions"><button id="copy-export" class="button button-primary" type="button">Copy</button><button id="download-export" class="button button-outline" type="button">Download .json</button><button id="close-export-inline" class="button button-quiet" type="button">Close</button></div>
         </section>
       </div>
+    </div>
+    <div id="player-preview-modal" class="modal player-preview-modal" hidden>
+      <div class="modal-backdrop" data-close-player-preview></div>
+      <section class="player-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="player-preview-title">
+        <header class="player-preview-header">
+          <div><p class="eyebrow">Testing Mode · Live preview</p><h2 id="player-preview-title">Player Screen</h2></div>
+          <button id="player-preview-close" class="icon-button" type="button" aria-label="Close player preview">×</button>
+        </header>
+        <div class="player-preview-controls" role="group" aria-label="Choose team preview">
+          <button class="button button-outline" type="button" data-preview-team="blue" aria-pressed="true">Preview: Blue Team</button>
+          <button class="button button-outline" type="button" data-preview-team="red" aria-pressed="false">Preview: Red Team</button>
+        </div>
+        <div id="player-preview-container" class="player-preview-container"></div>
+      </section>
     </div>
   </section>
 
@@ -210,7 +225,7 @@
         </div>
         <div id="player-game" class="player-game panel" hidden>
           <div class="player-game-top"><div id="team-badge" class="team-badge">BLUE TEAM</div></div>
-          <p id="player-session-label" class="eyebrow">SESSION 1 · QUESTION 1</p>
+          <p id="player-session-label" class="eyebrow">ROUND 1 · QUESTION 1</p>
           <h1 id="player-question" class="player-question">Name a party food.</h1>
           <div id="player-turn-status" class="player-turn-status">Your team is active — discuss and submit one answer</div>
           <div id="player-answer-board" class="player-answer-board"></div>

@@ -139,6 +139,7 @@
   const host = (() => {
     let current = null;
     let editorQuestions = [];
+    let previewTeam = 'blue';
     const connection = $('#connection-status');
 
     function showMessage(text, target) {
@@ -184,6 +185,8 @@
       $('#create-panel').hidden = true;
       $('#dashboard').hidden = false;
       $('#test-mode-badge').hidden = !state.isTestMode;
+      $('#preview-player-screen').hidden = !state.isTestMode;
+      if (!state.isTestMode) $('#player-preview-modal').hidden = true;
       $('#room-code').textContent = state.code;
       $('#room-theme-name').textContent = THEMES[themeId].name;
       updateShareLink();
@@ -197,12 +200,13 @@
       $('#session-label').textContent = state.session ? `ROUND ${state.session.number}` : 'NO ROUND';
       $('#host-leave').disabled = Boolean(state.session);
       $('#host-leave').hidden = false;
-      $('#host-leave').title = state.session ? 'End the active session before leaving' : '';
+      $('#host-leave').title = state.session ? 'End the active round before leaving' : '';
       renderPlayers();
       renderSession();
       renderHistory();
       renderSubmissionLog();
       renderRoute();
+      if (!$('#player-preview-modal').hidden) player.renderPreview(state, previewTeam);
     }
 
     function renderPlayers() {
@@ -238,12 +242,12 @@
       $('#start-session').disabled = !current.isTestMode && current.players.filter((player) => player.waiting && player.connected).length < 4;
       $('#start-question').hidden = !ready;
       $('#question-editor-open').disabled = Boolean(session);
-      $('#question-editor-open').title = session ? 'End the session before editing questions' : '';
+      $('#question-editor-open').title = session ? 'End the round before editing questions' : '';
       $('#end-session').hidden = !session;
       $('#ready-view').hidden = Boolean(question);
       $('#ready-view').querySelector('p:not(.eyebrow):not(.ready-ornament)').textContent = current.isTestMode
-        ? 'Start a solo test session anytime; when no players are waiting, simulated Blue and Red players fill both teams.'
-        : 'Create a session when at least four players are waiting. Odd players and extras stay in the room for the next round.';
+        ? 'Start a solo test round anytime; when no players are waiting, simulated Blue and Red players fill both teams.'
+        : 'Start a round when at least four players are waiting. Odd players and extras stay in the room for the next round.';
       $('#board-view').hidden = !question || (session?.status === 'complete' && !finalScoreShown);
       $('#final-score').hidden = session?.status !== 'complete';
       $('#round-complete-note').hidden = !finalScoreShown;
@@ -319,7 +323,7 @@
         const isCurrentSession = item.current;
         const sessionOpen = openLatest && isCurrentSession;
         return `<details class="session-log-group" ${sessionOpen ? 'open' : ''}>
-          <summary>Session ${item.number}${isCurrentSession ? ' · in progress' : ''}</summary>
+          <summary>Round ${item.number}${isCurrentSession ? ' · in progress' : ''}</summary>
           ${questions || '<p class="empty-log">No submissions yet.</p>'}
         </details>`;
       }).join('');
@@ -344,7 +348,7 @@
         ? (current.session.status === 'complete' ? sessions[sessions.length - 1] : null)
         : sessions[sessions.length - 1];
       $('#summary-submission-log').innerHTML = latest
-        ? `<h3><span data-theme-title></span> · Session ${latest.number} submission log</h3><div class="summary-log-scroll">${renderLogGroups([latest], true)}</div>`
+        ? `<h3><span data-theme-title></span> · Round ${latest.number} submission log</h3><div class="summary-log-scroll">${renderLogGroups([latest], true)}</div>`
         : '';
       if (latest) {
         $('#summary-submission-log [data-theme-title]').textContent = THEMES[getTheme(current.themeId).id].title;
@@ -550,6 +554,26 @@
       if (confirm('Reset the room? This clears players and all scores but keeps the question bank and theme.')) act('resetRoom');
     });
     $('#host-leave').addEventListener('click', leave);
+    $('#preview-player-screen').addEventListener('click', () => {
+      previewTeam = 'blue';
+      $('#player-preview-modal [data-preview-team="blue"]').setAttribute('aria-pressed', 'true');
+      $('#player-preview-modal [data-preview-team="red"]').setAttribute('aria-pressed', 'false');
+      $('#player-preview-modal').hidden = false;
+      player.renderPreview(current, previewTeam);
+      $('#player-preview-close').focus();
+    });
+    $('#player-preview-modal').addEventListener('click', (event) => {
+      const teamButton = event.target.closest('[data-preview-team]');
+      if (teamButton) {
+        previewTeam = teamButton.dataset.previewTeam;
+        $('#player-preview-modal [data-preview-team="blue"]').setAttribute('aria-pressed', String(previewTeam === 'blue'));
+        $('#player-preview-modal [data-preview-team="red"]').setAttribute('aria-pressed', String(previewTeam === 'red'));
+        player.renderPreview(current, previewTeam);
+      }
+      if (event.target.closest('[data-close-player-preview]') || event.target.closest('#player-preview-close')) {
+        $('#player-preview-modal').hidden = true;
+      }
+    });
     $('#players-list').addEventListener('click', (event) => {
       const swap = event.target.closest('[data-swap]');
       const remove = event.target.closest('[data-remove]');
@@ -753,6 +777,7 @@
       get state() { return current; },
       sync,
       setOnline: (online) => setConnection(connection, online),
+      renderPreview,
       updateShareLink
     };
   })();
@@ -762,6 +787,7 @@
     let previousQuestionKey = '';
     let previousTotalStrikes = null;
     let joining = false;
+    let previewRefs = null;
     const connection = $('#player-connection');
 
     function updateStrikeFlash(question) {
@@ -818,47 +844,43 @@
       });
     }
 
-    function render(nextState) {
-      current = nextState;
-      applyTheme(current.themeId);
-      $('#join-panel').hidden = true;
-      $('#player-view').hidden = false;
-      $('#player-room-code').textContent = `ROOM ${current.code}`;
-      $('#waiting-name').textContent = `Hi, ${current.player.name}.`;
-      const roundScores = current.roundScores || { blue: 0, red: 0 };
-      $('#waiting-blue').textContent = roundScores.blue;
-      $('#waiting-red').textContent = roundScores.red;
-      $('#game-blue').textContent = roundScores.blue;
-      $('#game-red').textContent = roundScores.red;
+    function renderPlayerScreen(state, refs = null) {
+      const get = (id) => refs ? refs.get(id) : $(`#${id}`);
+      const roundScores = state.roundScores || { blue: 0, red: 0 };
+      get('player-room-code').textContent = `ROOM ${state.code}`;
+      get('waiting-name').textContent = `Hi, ${state.player.name}.`;
+      get('waiting-blue').textContent = roundScores.blue;
+      get('waiting-red').textContent = roundScores.red;
+      get('game-blue').textContent = roundScores.blue;
+      get('game-red').textContent = roundScores.red;
 
-      const question = current.session?.question;
-      updateStrikeFlash(question);
-      const assigned = Boolean(current.player.team);
-      const inSession = assigned && current.session?.teams?.[current.player.team]?.includes(current.player.id);
-      const shouldWait = !current.session || !inSession || !question;
-      $('#player-waiting').hidden = !shouldWait;
-      $('#player-game').hidden = shouldWait;
-      const waitingMessage = !current.session
+      const question = state.session?.question;
+      const assigned = Boolean(state.player.team);
+      const inSession = assigned && state.session?.teams?.[state.player.team]?.includes(state.player.id);
+      const shouldWait = !state.session || !inSession || !question;
+      get('player-waiting').hidden = !shouldWait;
+      get('player-game').hidden = shouldWait;
+      const waitingMessage = !state.session
         ? 'Waiting for the host to start'
-        : current.session.status === 'complete'
-          ? 'Session complete. Waiting for the host to finish.'
-          : inSession && current.session.status === 'ready'
+        : state.session.status === 'complete'
+          ? 'Round complete. Waiting for the host to finish.'
+          : inSession && state.session.status === 'ready'
             ? 'Teams are set. The host will start the first question.'
-            : 'Session in progress. Waiting for the next group.';
-      $('.waiting-message').textContent = waitingMessage;
-      const waitingTeam = $('#waiting-team');
+            : 'Round in progress. Waiting for the next group.';
+      (refs ? refs.get('waiting-message') : $('.waiting-message')).textContent = waitingMessage;
+      const waitingTeam = get('waiting-team');
       waitingTeam.hidden = !assigned;
-      waitingTeam.className = `waiting-team ${current.player.team || ''}`;
-      waitingTeam.textContent = assigned ? `${current.player.team.toUpperCase()} TEAM` : '';
+      waitingTeam.className = `waiting-team ${state.player.team || ''}`;
+      waitingTeam.textContent = assigned ? `${state.player.team.toUpperCase()} TEAM` : '';
       if (shouldWait) return;
 
-      $('#team-badge').className = `team-badge ${current.player.team}`;
-      $('#team-badge').textContent = `${current.player.team.toUpperCase()} TEAM`;
-      $('#player-session-label').textContent = `Round ${current.session.number} — Blue ${roundScores.blue} / Red ${roundScores.red}`;
-      $('#player-question').textContent = question.text;
-      const isActive = question.activeTeam === current.player.team && ['playing', 'steal'].includes(question.status);
+      get('team-badge').className = `team-badge ${state.player.team}`;
+      get('team-badge').textContent = `${state.player.team.toUpperCase()} TEAM`;
+      get('player-session-label').textContent = `Round ${state.session.number} — Blue ${roundScores.blue} / Red ${roundScores.red}`;
+      get('player-question').textContent = question.text;
+      const isActive = question.activeTeam === state.player.team && ['playing', 'steal'].includes(question.status);
       const hasSubmission = question.submissionReceived;
-      const status = $('#player-turn-status');
+      const status = get('player-turn-status');
       status.className = 'player-turn-status';
       if (question.status === 'ended') {
         status.textContent = 'Question complete. All answers are now revealed.';
@@ -881,21 +903,85 @@
         }
         status.classList.add('inactive');
       }
-      $('#player-answer-board').innerHTML = question.board.map((answer, index) => {
+      get('player-answer-board').innerHTML = question.board.map((answer, index) => {
         const owner = answer.revealedBy || null;
         const ownerClass = owner === 'blue' ? 'blue' : owner === 'red' ? 'red' : 'unmatched';
         const classes = answer.revealed ? `answer-tile revealed ${ownerClass}` : 'answer-tile';
         return `<div class="${classes}"><span class="answer-index">${index + 1}</span>${answer.revealed ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>` : '<span class="answer-hidden"></span><span class="answer-points">• • •</span>'}</div>`;
       }).join('');
       const canSubmit = isActive && !hasSubmission;
-      $('#answer-form').hidden = !canSubmit;
-      $('#answer-locked').hidden = !(isActive && hasSubmission && question.status !== 'ended');
-      const result = $('#player-result');
+      get('answer-form').hidden = !canSubmit;
+      get('answer-locked').hidden = !(isActive && hasSubmission && question.status !== 'ended');
+      const result = get('player-result');
       result.hidden = !question.result;
       if (question.result) {
-        const strikes = question.strikes[current.player.team] || 0;
+        const strikes = question.strikes[state.player.team] || 0;
         result.textContent = `${question.result} ${strikes} strike${strikes === 1 ? '' : 's'} for your team. Question points: ${question.accumulated}.`;
       }
+    }
+
+    function renderPreview(hostState, team) {
+      if (!hostState?.isTestMode) return;
+      if (!previewRefs) {
+        const preview = $('#player-view').cloneNode(true);
+        preview.hidden = false;
+        previewRefs = new Map([['player-view', preview]]);
+        preview.querySelectorAll('[id]').forEach((element) => {
+          const sourceId = element.id;
+          previewRefs.set(sourceId, element);
+          element.id = `player-preview-${sourceId}`;
+        });
+        preview.querySelectorAll('[for]').forEach((element) => {
+          element.htmlFor = `player-preview-${element.htmlFor}`;
+        });
+        previewRefs.set('waiting-message', preview.querySelector('.waiting-message'));
+        preview.id = 'player-preview-screen';
+        preview.classList.add('player-preview-screen');
+        previewRefs.get('answer-input').readOnly = true;
+        previewRefs.get('answer-form').addEventListener('submit', (event) => event.preventDefault());
+        $('#player-preview-container').replaceChildren(preview);
+      }
+      const session = hostState.session;
+      const question = session?.question;
+      const simulatedPlayers = hostState.players.filter((player) => player.team === team);
+      const sessionTeamIds = session?.teams?.[team] || [];
+      const player = simulatedPlayers.find((candidate) => sessionTeamIds.includes(candidate.id)) ||
+        simulatedPlayers[0] || { id: `preview-${team}`, name: `${team[0].toUpperCase()}${team.slice(1)} 1` };
+      const playerQuestion = question ? {
+        text: question.text,
+        board: question.answers.map((answer, index) => {
+          const revealed = question.revealed.includes(index) || question.status === 'ended';
+          return {
+            revealed,
+            text: revealed ? answer.text : null,
+            points: revealed ? answer.points : null,
+            revealedBy: revealed ? (question.revealedBy?.[index] ?? null) : null
+          };
+        }),
+        status: question.status,
+        activeTeam: question.activeTeam,
+        strikes: question.strikes,
+        accumulated: question.accumulated,
+        isTyping: Boolean(question.isTyping),
+        submissionReceived: Boolean(question.submission),
+        result: question.result
+      } : null;
+      renderPlayerScreen({
+        code: hostState.code,
+        themeId: hostState.themeId,
+        player: { id: player.id, name: player.name, team, connected: true },
+        roundScores: hostState.roundScores,
+        session: session ? { ...session, question: playerQuestion } : null
+      }, previewRefs);
+    }
+
+    function render(nextState) {
+      current = nextState;
+      applyTheme(current.themeId);
+      $('#join-panel').hidden = true;
+      $('#player-view').hidden = false;
+      updateStrikeFlash(current.session?.question);
+      renderPlayerScreen(current);
     }
 
     function reconnect() {
@@ -972,7 +1058,8 @@
 
     return {
       reconnect,
-      setOnline: (online) => setConnection(connection, online)
+      setOnline: (online) => setConnection(connection, online),
+      renderPreview
     };
   })();
 

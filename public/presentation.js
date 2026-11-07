@@ -99,10 +99,10 @@
     $('#presentation-theme-name').textContent = themeNames[themeId];
     updateJoinInfo(roomCode);
     const scores = state.roundScores || { blue: 0, red: 0 };
-    const roundNumber = state.session?.number ?? state.sessionNumber ?? 0;
+    const questionNumber = state.session ? Number(state.session.questionIndex ?? 0) + 1 : 0;
     $('#presentation-blue-score').textContent = scores.blue;
     $('#presentation-red-score').textContent = scores.red;
-    $('#presentation-round-number').textContent = roundNumber;
+    $('#presentation-question-number').textContent = questionNumber;
 
     const question = state.session?.question;
     renderStrikes(question);

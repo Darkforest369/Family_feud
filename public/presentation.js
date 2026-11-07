@@ -196,13 +196,16 @@
 
     if (state.session?.finalScoreShown) {
       $('#presentation-game').hidden = true;
-      $('#presentation-final').hidden = false;
+      const finalScore = $('#presentation-final');
+      finalScore.hidden = false;
       const winner = scores.blue === scores.red ? 'tie' : scores.blue > scores.red ? 'blue' : 'red';
-      const winnerElement = $('#presentation-winner');
-      winnerElement.className = `presentation-winner${winner === 'tie' ? '' : ` ${winner}`}`;
-      winnerElement.textContent = winner === 'tie'
-        ? 'IT’S A TIE!'
-        : `${winner.toUpperCase()} TEAM WINS!`;
+      finalScore.className = `presentation-final${winner === 'tie' ? '' : ` ${winner}-wins`}`;
+      $('#presentation-final-blue-score').textContent = scores.blue;
+      $('#presentation-final-red-score').textContent = scores.red;
+      $('#presentation-final-blue').classList.toggle('is-winner', winner === 'blue');
+      $('#presentation-final-blue').classList.toggle('is-loser', winner === 'red');
+      $('#presentation-final-red').classList.toggle('is-winner', winner === 'red');
+      $('#presentation-final-red').classList.toggle('is-loser', winner === 'blue');
       return;
     }
 
@@ -232,13 +235,12 @@
         ? `answer-tile presentation-answer-tile revealed ${ownerClass}${animateReveal ? ' presentation-reveal' : ''}`
         : 'answer-tile presentation-answer-tile';
       return `<div class="${classes}" data-answer-index="${index}">
+        <span class="answer-index">${index + 1}</span>
         <div class="presentation-answer-flipper">
           <div class="presentation-answer-face presentation-answer-front">
-            <span class="answer-index">${index + 1}</span>
             <span class="presentation-answer-placeholder" aria-label="Hidden answer">?</span>
           </div>
           <div class="presentation-answer-face presentation-answer-back">
-            <span class="answer-index">${index + 1}</span>
             ${answer.revealed
               ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>`
               : ''}

@@ -116,6 +116,15 @@
     else renderRoute();
   }
 
+  $('#host-game-link').addEventListener('click', (event) => {
+    event.preventDefault();
+    setRoute('host');
+  });
+  $('#join-game-link').addEventListener('click', (event) => {
+    event.preventDefault();
+    setRoute('join');
+  });
+
   function renderRoute() {
     const savedHost = hostSaved();
     const savedPlayer = playerSaved();

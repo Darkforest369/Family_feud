@@ -29,6 +29,91 @@
   let hasJoined = false;
   let renderedQuestionText = '';
   let previousStrikes = { blue: 0, red: 0 };
+  let previousAudioQuestionKey = '';
+  let previousAudioStrikes = null;
+  let previousAudioRevealed = null;
+  let audioContext = null;
+
+  function playTone(startFrequency, endFrequency, duration, waveform, delay = 0, volume = 0.16) {
+    if (!audioContext || audioContext.state !== 'running') return;
+    const startTime = audioContext.currentTime + delay;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = waveform;
+    oscillator.frequency.setValueAtTime(startFrequency, startTime);
+    oscillator.frequency.exponentialRampToValueAtTime(endFrequency, startTime + duration);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.linearRampToValueAtTime(volume, startTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start(startTime);
+    oscillator.stop(startTime + duration);
+  }
+
+  function playCorrectSound() {
+    playTone(660, 880, 0.22, 'sine', 0);
+    playTone(880, 1175, 0.28, 'sine', 0.1, 0.12);
+  }
+
+  function playStrikeSound() {
+    playTone(220, 95, 0.32, 'sawtooth', 0, 0.13);
+  }
+
+  function enableAudio() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const button = $('#presentation-sound-enable');
+    if (!AudioContext) {
+      button.textContent = 'Audio is not supported in this browser';
+      button.disabled = true;
+      return;
+    }
+    try {
+      audioContext ||= new AudioContext();
+      audioContext.resume().then(() => {
+        button.hidden = true;
+      }).catch((error) => {
+        console.error('Could not enable presentation audio.', error);
+        button.textContent = 'Tap to enable presentation sounds';
+      });
+    } catch (error) {
+      console.error('Could not initialize presentation audio.', error);
+      button.textContent = 'Tap to enable presentation sounds';
+    }
+  }
+
+  function playStateSounds(state, question) {
+    const session = state.session;
+    const questionKey = question && session
+      ? `${session.number}:${session.questionIndex}`
+      : '';
+    const strikes = question
+      ? {
+        blue: Number(question.strikes?.blue) || 0,
+        red: Number(question.strikes?.red) || 0
+      }
+      : null;
+    const revealed = question?.answers?.map((answer) => Boolean(answer.revealed)) || null;
+    if (questionKey !== previousAudioQuestionKey) {
+      previousAudioQuestionKey = questionKey;
+      previousAudioStrikes = strikes;
+      previousAudioRevealed = revealed;
+      return;
+    }
+    if (strikes && previousAudioStrikes &&
+      (strikes.blue > previousAudioStrikes.blue || strikes.red > previousAudioStrikes.red)) {
+      playStrikeSound();
+    }
+    if (question && revealed && previousAudioRevealed &&
+      question.answers.some((answer, index) =>
+        answer.revealed && !previousAudioRevealed[index] &&
+        ['blue', 'red'].includes(answer.revealedBy)
+      )) {
+      playCorrectSound();
+    }
+    previousAudioStrikes = strikes;
+    previousAudioRevealed = revealed;
+  }
 
   function applyTheme(themeId) {
     const id = Object.hasOwn(themeTitles, themeId) ? themeId : 'default';
@@ -105,6 +190,7 @@
     $('#presentation-question-number').textContent = questionNumber;
 
     const question = state.session?.question;
+    playStateSounds(state, question);
     renderStrikes(question);
     renderTurn(question);
 
@@ -146,10 +232,18 @@
         ? `answer-tile presentation-answer-tile revealed ${ownerClass}${animateReveal ? ' presentation-reveal' : ''}`
         : 'answer-tile presentation-answer-tile';
       return `<div class="${classes}" data-answer-index="${index}">
-        <span class="answer-index">${index + 1}</span>
-        ${answer.revealed
-          ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>`
-          : '<span class="presentation-answer-placeholder" aria-label="Hidden answer">?</span>'}
+        <div class="presentation-answer-flipper">
+          <div class="presentation-answer-face presentation-answer-front">
+            <span class="answer-index">${index + 1}</span>
+            <span class="presentation-answer-placeholder" aria-label="Hidden answer">?</span>
+          </div>
+          <div class="presentation-answer-face presentation-answer-back">
+            <span class="answer-index">${index + 1}</span>
+            ${answer.revealed
+              ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>`
+              : ''}
+          </div>
+        </div>
       </div>`;
     }).join('');
   }
@@ -195,4 +289,5 @@
     if (!hasJoined) showError('Unable to connect. Retrying…');
   });
   if (!roomCode) showError('Open this page with a room code, or join a room from the host page.');
+  $('#presentation-sound-enable').addEventListener('click', enableAudio);
 })();

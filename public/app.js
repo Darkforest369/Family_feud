@@ -827,32 +827,50 @@
     let current = null;
     let previousQuestionKey = '';
     let previousStrikes = null;
+    let previousRevealed = null;
     let joining = false;
     let preview = null;
     let previewMode = false;
     const connection = $('#player-connection');
 
-    function updateStrikeFlash(question) {
-      const team = current?.player.team;
-      const questionKey = question ? `${current.session.number}:${current.session.questionIndex}` : '';
+    function triggerPlayerFlash(className) {
+      const flash = $('#strike-flash');
+      flash.classList.remove('strike-flash-active', 'correct-flash-active');
+      void flash.offsetWidth;
+      flash.classList.add(className);
+    }
+
+    function updatePlayerFeedback(state) {
+      const question = state.session?.question;
+      const team = state.player.team;
+      const questionKey = question ? `${state.session.number}:${state.session.questionIndex}` : '';
       const strikes = question && questionKey
         ? {
           blue: Number(question.strikes?.blue) || 0,
           red: Number(question.strikes?.red) || 0
         }
         : null;
+      const revealed = question?.board?.map((answer) => Boolean(answer.revealed)) || null;
       if (questionKey !== previousQuestionKey) {
         previousQuestionKey = questionKey;
         previousStrikes = strikes;
+        previousRevealed = revealed;
         return;
       }
       if (team && strikes && previousStrikes && strikes[team] > previousStrikes[team]) {
-        const flash = $('#strike-flash');
-        flash.classList.remove('strike-flash-active');
-        void flash.offsetWidth;
-        flash.classList.add('strike-flash-active');
+        triggerPlayerFlash('strike-flash-active');
+        const playerView = $('#player-view');
+        playerView.classList.remove('player-screen-shake');
+        void playerView.offsetWidth;
+        playerView.classList.add('player-screen-shake');
+      } else if (team && question && revealed && previousRevealed &&
+        question.board.some((answer, index) =>
+          answer.revealed && !previousRevealed[index] && answer.revealedBy === team
+        )) {
+        triggerPlayerFlash('correct-flash-active');
       }
       previousStrikes = strikes;
+      previousRevealed = revealed;
     }
 
     function showError(text) {
@@ -957,13 +975,6 @@
       const canSubmit = isActive && !hasSubmission;
       get('answer-form').hidden = !canSubmit;
       get('answer-locked').hidden = !(isActive && hasSubmission && question.status !== 'ended');
-      const result = get('player-result');
-      result.hidden = !question.result ||
-        (question.status !== 'ended' && (!isActive || question.status === 'steal'));
-      if (question.result) {
-        const strikes = question.strikes[state.player.team] || 0;
-        result.textContent = `${question.result} ${strikes} strike${strikes === 1 ? '' : 's'} for your team. Question points: ${question.accumulated}.`;
-      }
     }
 
     function startPreview(code, team) {
@@ -1023,7 +1034,7 @@
       applyTheme(current.themeId);
       $('#join-panel').hidden = true;
       $('#player-view').hidden = false;
-      updateStrikeFlash(current.session?.question);
+      updatePlayerFeedback(current);
       renderPlayerScreen(current);
     }
 

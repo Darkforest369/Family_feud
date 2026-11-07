@@ -226,6 +226,7 @@ h1, h2 { font-family: Arial, sans-serif; letter-spacing: 0; }
 .wordmark b { color: var(--theme-text); }
 .wordmark-tree { color: var(--theme-accent); font-size: 1.2rem; }
 .topbar-right { display: flex; align-items: center; gap: 23px; }
+.test-mode-badge { padding: 5px 8px; border: 1px solid var(--theme-border-strong); border-radius: 3px; background: var(--theme-decor-bg); color: var(--theme-decor-text); font-size: .62rem; font-weight: 900; letter-spacing: .08em; }
 .connection { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: .73rem; font-weight: 700; }
 .connection i, .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--theme-accent); }
 .connection.is-online i, .live-dot { background: var(--theme-primary); box-shadow: 0 0 0 3px rgba(59,154,101,.13); }
@@ -238,6 +239,8 @@ h1, h2 { font-family: Arial, sans-serif; letter-spacing: 0; }
 .create-panel h1 span { color: var(--theme-primary-muted); }
 .create-panel p:not(.eyebrow) { max-width: 460px; margin-bottom: 27px; color: var(--theme-primary-muted); line-height: 1.6; }
 .create-panel .button { min-width: 185px; }
+.test-mode-option { display: inline-flex; align-items: center; gap: 8px; margin: -10px 0 16px; color: var(--theme-primary-muted); font-size: .78rem; font-weight: 800; cursor: pointer; }
+.test-mode-option input { width: 16px; height: 16px; accent-color: var(--theme-accent); }
 .host-back-link, .join-back-link { margin-top: 16px; color: inherit; font-size: .82rem; font-weight: 800; text-decoration: underline; }
 .reconnecting-message { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--theme-border); border-radius: 4px; background: var(--theme-surface); color: var(--theme-text); font-size: .85rem; font-weight: 800; }
 .player-reconnecting { border-color: var(--theme-positive-border); background: var(--theme-positive-bg); color: var(--theme-positive-text); }
@@ -284,6 +287,7 @@ h1, h2 { font-family: Arial, sans-serif; letter-spacing: 0; }
 .team-mini.blue { background: var(--blue-light); color: var(--blue); }
 .team-mini.red { background: var(--red-light); color: var(--red); }
 .played-mark { color: var(--muted); font-size: .59rem; font-weight: 900; }
+.simulated-mark { color: var(--theme-decor-text); font-size: .59rem; font-weight: 900; }
 .disconnect-mark { color: var(--team-red-text); font-weight: 800; }
 .empty-players { padding: 18px 5px; color: var(--muted); font-size: .82rem; text-align: center; }
 .sidebar-actions { display: grid; gap: 8px; margin-top: 14px; }
@@ -356,6 +360,12 @@ h1, h2 { font-family: Arial, sans-serif; letter-spacing: 0; }
 .submission-box .eyebrow { margin: 0; }
 .submission-box strong { font-size: 1.15rem; font-weight: 700; }
 .submission-box small { color: var(--muted); font-size: .68rem; }
+.simulate-answer-form { display: grid; gap: 7px; margin-top: 12px; padding: 11px 12px; border: 1px dashed var(--theme-border-strong); border-radius: 4px; background: var(--theme-surface-alt); }
+.simulate-answer-form label { color: var(--muted); font-size: .72rem; font-weight: 900; }
+.simulate-answer-form label span { color: var(--pine); text-transform: uppercase; }
+.simulate-answer-form > div { display: flex; gap: 7px; }
+.simulate-answer-form input { flex: 1; min-height: 40px; padding: 8px 10px; }
+.simulate-answer-form .button { min-height: 40px; }
 input { min-width: 0; border: 1px solid var(--theme-input-border); border-radius: 4px; outline: 0; background: var(--theme-surface); color: var(--ink); }
 input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12); }
 .round-result { margin-top: 12px; padding: 11px 12px; border-left: 3px solid var(--theme-decor); background: var(--theme-decor-bg); color: var(--theme-decor-text); font-size: .8rem; line-height: 1.5; }

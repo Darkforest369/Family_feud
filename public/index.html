@@ -41,6 +41,7 @@
     <header class="topbar">
       <a class="wordmark" href="#" aria-label="Game home"><span class="wordmark-tree">✳</span> <b data-theme-title>Family Feud</b></a>
       <div class="topbar-right">
+        <span id="test-mode-badge" class="test-mode-badge" hidden>TEST MODE</span>
         <span id="connection-status" class="connection"><i></i> Connecting</span>
         <button id="host-leave" class="text-link">Leave room</button>
       </div>
@@ -52,6 +53,7 @@
         <p>Create a room, share the code, and let the teams roll in.</p>
         <div id="host-error" class="message" role="status" hidden></div>
         <div id="host-reconnecting" class="reconnecting-message" hidden>Reconnecting as host…</div>
+        <label class="test-mode-option"><input id="test-mode-toggle" type="checkbox"> Enable Testing Mode (Solo Play)</label>
         <button id="create-room" class="button button-primary">Create a room <span aria-hidden="true">→</span></button>
         <a id="host-back-link" class="host-back-link" href="#">Back to home</a>
       </section>
@@ -129,6 +131,10 @@
               <div id="submission-box" class="submission-box" hidden>
                 <div><span class="eyebrow">PENDING SUBMISSION</span><strong id="submitted-answer">—</strong><small id="submitted-by"></small></div>
               </div>
+              <form id="simulate-answer-form" class="simulate-answer-form" hidden>
+                <label for="simulate-answer-input">Simulate Answer <span id="simulate-answer-team"></span></label>
+                <div><input id="simulate-answer-input" maxlength="80" autocomplete="off" placeholder="Type a team answer"><button class="button button-primary" type="submit">Submit</button></div>
+              </form>
               <div id="round-result" class="round-result" hidden></div>
               <div class="board-controls">
                 <div id="round-complete-note" class="round-complete-note" hidden>Round complete. End the round and start a new one.</div>

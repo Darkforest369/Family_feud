@@ -281,11 +281,13 @@ function hostSnapshot(room) {
   return {
     code: room.code,
     themeId: room.themeId,
+    isTestMode: room.isTestMode,
     players: [...room.players.values()].map((player) => ({
       id: player.id,
       name: player.name,
       team: player.team,
       connected: player.connected,
+      simulated: Boolean(player.isDummy),
       played: room.playedPlayerIds.has(player.id),
       waiting: !session || !session.playerIds.includes(player.id)
     })),
@@ -417,6 +419,20 @@ function broadcastPlayerStates(room) {
 }
 
 function fail(message) { throw new Error(message); }
+
+function submitAnswer(room, { answer, team, playerName }) {
+  const question = room.session?.question;
+  if (!question || !['playing', 'steal'].includes(question.status) || question.activeTeam !== team) {
+    fail('Your team is not active right now.');
+  }
+  if (question.status === 'steal' && question.stealSubmitted) fail('Steal already submitted.');
+  if (question.submission) fail('Your team already submitted an answer.');
+  const text = String(answer ?? '').slice(0, 80);
+  if (!text.trim()) fail('Enter an answer first.');
+  question.submission = { text, playerName, team, submittedAt: Date.now() };
+  question.typingPlayerId = null;
+  if (question.status === 'steal') question.stealSubmitted = true;
+}
 
 function hostAction(socket, payload, action) {
   const room = rooms.get(String(payload.code || '').toUpperCase());
@@ -584,7 +600,7 @@ function validateQuestions(value) {
   });
 }
 
-function createRoom(requestedThemeId) {
+function createRoom(requestedThemeId, isTestMode = false) {
   let code;
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   do {
@@ -596,6 +612,7 @@ function createRoom(requestedThemeId) {
     code,
     // Theme is immutable for this room's lifetime, including Reset room.
     themeId,
+    isTestMode,
     hostToken: crypto.randomBytes(24).toString('hex'),
     players: new Map(),
     playedPlayerIds: new Set(),
@@ -623,8 +640,8 @@ function respond(socket, event, handler) {
 }
 
 io.on('connection', (socket) => {
-  respond(socket, 'createRoom', ({ themeId } = {}) => {
-    const room = createRoom(themeId);
+  respond(socket, 'createRoom', ({ themeId, isTestMode } = {}) => {
+    const room = createRoom(themeId, isTestMode === true);
     socket.join(roomChannel(room.code));
     socket.join(hostChannel(room.code));
     return { code: room.code, token: room.hostToken, state: hostSnapshot(room) };
@@ -692,18 +709,8 @@ io.on('connection', (socket) => {
     const reference = socket.data.player;
     const room = reference && rooms.get(reference.code);
     const player = room?.players.get(reference.id);
-    const question = room?.session?.question;
     if (!player || !player.connected || player.socketId !== socket.id) fail('Join the room before submitting.');
-    if (question?.stealSubmitted && question.stolenFrom && question.activeTeam === player.team) fail('Steal already submitted.');
-    if (!question || !['playing', 'steal'].includes(question.status) || question.activeTeam !== player.team) fail('Your team is not active right now.');
-    if (question.status === 'steal' && question.stealSubmitted) fail('Steal already submitted.');
-    if (question.submission) fail('Your team already submitted an answer.');
-    const text = String(answer ?? '').slice(0, 80);
-    if (!text.trim()) fail('Enter an answer first.');
-    const submission = { text, playerName: player.name, team: player.team, submittedAt: Date.now() };
-    question.submission = submission;
-    question.typingPlayerId = null;
-    if (question.status === 'steal') question.stealSubmitted = true;
+    submitAnswer(room, { answer, team: player.team, playerName: player.name });
     broadcast(room);
     return {};
   });
@@ -752,8 +759,21 @@ io.on('connection', (socket) => {
       if (room.session) fail('End the current session before starting another.');
       if (room.questions.length === 0) fail('Add at least 1 question in the Question Editor before starting a round.');
       const waiting = [...room.players.values()].filter((player) => !player.team && player.connected);
-      const count = Math.min(10, waiting.length) - (Math.min(10, waiting.length) % 2);
-      if (count < 4) fail('At least 4 connected waiting players are needed to start.');
+      if (room.isTestMode && waiting.length === 0) {
+        ['Blue 1', 'Red 1', 'Blue 2', 'Red 2'].forEach((name) => {
+          const player = {
+            id: crypto.randomUUID(), name, team: null, socketId: null,
+            connected: true, isDummy: true
+          };
+          room.players.set(player.id, player);
+          waiting.push(player);
+        });
+      }
+      const available = Math.min(10, waiting.length);
+      const count = room.isTestMode
+        ? available
+        : available - (available % 2);
+      if (!room.isTestMode && count < 4) fail('At least 4 connected waiting players are needed to start.');
       const selected = waiting.slice(0, count);
       room.roundScores = { blue: 0, red: 0 };
       const teams = { blue: [], red: [] };
@@ -776,6 +796,13 @@ io.on('connection', (socket) => {
         message: 'Teams are set. Start the first question when ready.'
       };
       return { startedPlayers: count };
+    }),
+    simulateAnswer: ({ code, token, answer }) => hostAction(socket, { code, token }, (room) => {
+      if (!room.isTestMode) fail('Simulated answers are only available in Testing Mode.');
+      const question = room.session?.question;
+      if (!question || !['playing', 'steal'].includes(question.status)) fail('There is no active team to answer.');
+      submitAnswer(room, { answer, team: question.activeTeam, playerName: 'Host simulation' });
+      return {};
     }),
     assignTeams: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
       if (!room.session || room.session.status !== 'ready') fail('Teams can only be assigned before the first question.');
@@ -880,6 +907,11 @@ io.on('connection', (socket) => {
       for (const id of session.playerIds) {
         const player = room.players.get(id);
         if (player) {
+          if (player.isDummy) {
+            room.players.delete(id);
+            room.playedPlayerIds.delete(id);
+            continue;
+          }
           player.team = null;
           room.playedPlayerIds.add(id);
         }
@@ -898,7 +930,7 @@ io.on('connection', (socket) => {
       const player = room.players.get(playerId);
       if (!player) fail('Player not found.');
       if (room.session?.playerIds.includes(playerId)) fail('End the session before removing its players.');
-      if (player.connected) io.to(player.socketId).emit('playerRemoved', 'The host removed you from the room.');
+      if (player.connected && player.socketId) io.to(player.socketId).emit('playerRemoved', 'The host removed you from the room.');
       room.players.delete(playerId);
       room.playedPlayerIds.delete(playerId);
       return {};
@@ -907,7 +939,7 @@ io.on('connection', (socket) => {
       if (room.session) fail('End the session before removing played players.');
       for (const playerId of room.playedPlayerIds) {
         const player = room.players.get(playerId);
-        if (player?.connected) io.to(player.socketId).emit('playerRemoved', 'The host removed the played group from the room.');
+        if (player?.connected && player.socketId) io.to(player.socketId).emit('playerRemoved', 'The host removed the played group from the room.');
         room.players.delete(playerId);
       }
       const removed = room.playedPlayerIds.size;
@@ -921,7 +953,7 @@ io.on('connection', (socket) => {
     }),
     resetRoom: ({ code, token }) => hostAction(socket, { code, token }, (room) => {
       for (const player of room.players.values()) {
-        if (player.connected) io.to(player.socketId).emit('playerRemoved', 'The host reset the room.');
+        if (player.connected && player.socketId) io.to(player.socketId).emit('playerRemoved', 'The host reset the room.');
       }
       room.players.clear();
       room.playedPlayerIds.clear();

@@ -183,6 +183,7 @@
       const themeId = applyTheme(state.themeId);
       $('#create-panel').hidden = true;
       $('#dashboard').hidden = false;
+      $('#test-mode-badge').hidden = !state.isTestMode;
       $('#room-code').textContent = state.code;
       $('#room-theme-name').textContent = THEMES[themeId].name;
       updateShareLink();
@@ -219,8 +220,9 @@
         const canSwap = session?.status === 'ready' && inSession;
         const team = player.team ? `<span class="team-mini ${player.team}">${player.team.toUpperCase()}</span>` : '<span>WAITING</span>';
         const played = player.played ? '<span class="played-mark">PLAYED</span>' : '';
+        const simulated = player.simulated ? '<span class="simulated-mark">SIMULATED</span>' : '';
         return `<div class="player-row">
-          <div><div class="player-row-name">${escape(player.name)}</div><div class="player-row-meta">${team}${played}${player.connected ? '' : '<span class="disconnect-mark">DISCONNECTED</span>'}</div></div>
+          <div><div class="player-row-name">${escape(player.name)}</div><div class="player-row-meta">${team}${played}${simulated}${player.connected ? '' : '<span class="disconnect-mark">DISCONNECTED</span>'}</div></div>
           <div class="player-row-actions">${canSwap ? `<button data-swap="${escape(player.id)}">Swap team</button>` : ''}${!inSession ? `<button data-remove="${escape(player.id)}" title="Remove player">Remove</button>` : ''}</div>
         </div>`;
       }).join('');
@@ -233,12 +235,15 @@
       const activeGame = Boolean(question && ['playing', 'steal'].includes(question.status));
       const finalScoreShown = Boolean(session?.finalScoreShown);
       $('#start-session').hidden = Boolean(session);
-      $('#start-session').disabled = current.players.filter((player) => player.waiting && player.connected).length < 4;
+      $('#start-session').disabled = !current.isTestMode && current.players.filter((player) => player.waiting && player.connected).length < 4;
       $('#start-question').hidden = !ready;
       $('#question-editor-open').disabled = Boolean(session);
       $('#question-editor-open').title = session ? 'End the session before editing questions' : '';
       $('#end-session').hidden = !session;
       $('#ready-view').hidden = Boolean(question);
+      $('#ready-view').querySelector('p:not(.eyebrow):not(.ready-ornament)').textContent = current.isTestMode
+        ? 'Start a solo test session anytime; when no players are waiting, simulated Blue and Red players fill both teams.'
+        : 'Create a session when at least four players are waiting. Odd players and extras stay in the room for the next round.';
       $('#board-view').hidden = !question || (session?.status === 'complete' && !finalScoreShown);
       $('#final-score').hidden = session?.status !== 'complete';
       $('#round-complete-note').hidden = !finalScoreShown;
@@ -278,6 +283,9 @@
         $('#submitted-answer').textContent = question.submission.text;
         $('#submitted-by').textContent = `${question.submission.team.toUpperCase()} TEAM · Submitted by ${question.submission.playerName}`;
       }
+      const simulateForm = $('#simulate-answer-form');
+      simulateForm.hidden = !current.isTestMode || !activeGame || Boolean(question.submission);
+      $('#simulate-answer-team').textContent = activeGame ? `· ${question.activeTeam.toUpperCase()} team` : '';
       $('#add-strike').hidden = !activeGame;
       $('#add-strike').textContent = question.status === 'steal' ? 'Fail Steal' : 'Add Strike';
       $('#pass-control').hidden = !activeGame || question.status === 'steal' || Boolean(question.submission);
@@ -484,7 +492,10 @@
       const button = $('#create-room');
       button.disabled = true;
       try {
-        const result = await new Promise((resolve, reject) => socket.emit('createRoom', { themeId: landingThemeId }, (reply) => reply?.ok ? resolve(reply) : reject(new Error(reply?.error || 'Could not create room.'))));
+        const result = await new Promise((resolve, reject) => socket.emit('createRoom', {
+          themeId: landingThemeId,
+          isTestMode: $('#test-mode-toggle').checked
+        }, (reply) => reply?.ok ? resolve(reply) : reject(new Error(reply?.error || 'Could not create room.'))));
         localStorage.setItem('feudHostCode', result.code);
         localStorage.setItem('feudHostToken', result.token);
         setRoute('host');
@@ -516,6 +527,22 @@
     $('#create-room').addEventListener('click', create);
     $('#start-session').addEventListener('click', () => act('startSession'));
     $('#start-question').addEventListener('click', () => act('startQuestion'));
+    $('#simulate-answer-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = $('#simulate-answer-input');
+      if (!input.value.trim()) return;
+      const button = $('#simulate-answer-form button');
+      button.disabled = true;
+      try {
+        await request('simulateAnswer', { answer: input.value });
+        input.value = '';
+        showMessage('');
+      } catch (error) {
+        showMessage(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
     $('#end-session').addEventListener('click', () => {
       if (confirm('End the round now? The current round score will be frozen to round history and reset to 0–0.')) act('endSession');
     });

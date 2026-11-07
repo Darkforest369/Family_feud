@@ -248,7 +248,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/presentation', (req, res) => res.sendFile(path.join(__dirname, 'public', 'presentation.html')));
 app.get('/host', (req, res) => res.redirect(302, '/#host'));
-app.get('/play', (req, res) => res.redirect(302, '/#join'));
+app.get('/play', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
 app.get('/config', (req, res) => res.json({ publicUrl: process.env.PUBLIC_URL || null }));
 app.get('/qr.svg', async (req, res, next) => {
@@ -268,6 +268,7 @@ app.get('/qr.svg', async (req, res, next) => {
 function roomChannel(code) { return `room:${code}`; }
 function hostChannel(code) { return `host:${code}`; }
 function presentationChannel(code) { return `presentation:${code}`; }
+function previewChannel(code, team) { return `preview:${code}:${team}`; }
 
 function safeQuestions(questions) {
   return questions.map((item) => ({
@@ -327,7 +328,7 @@ function hostSnapshot(room) {
   };
 }
 
-function playerSnapshot(room, player) {
+function playerSnapshot(room, player, readOnly = false) {
   const session = room.session;
   let question = null;
   if (session?.question) {
@@ -353,6 +354,7 @@ function playerSnapshot(room, player) {
     themeId: room.themeId,
     player: { id: player.id, name: player.name, team: player.team, connected: player.connected },
     roundScores: room.roundScores,
+    readOnly,
     session: session ? {
       number: session.number,
       status: session.status,
@@ -418,6 +420,15 @@ function broadcastPlayerStates(room) {
   for (const player of room.players.values()) {
     if (player.connected && player.socketId) {
       io.to(player.socketId).emit('playerState', playerSnapshot(room, player));
+    }
+  }
+  if (room.isTestMode) {
+    for (const team of ['blue', 'red']) {
+      const sessionTeam = room.session?.teams?.[team] || [];
+      const player = sessionTeam.map((id) => room.players.get(id)).find(Boolean) ||
+        [...room.players.values()].find((candidate) => candidate.team === team) ||
+        { id: `preview-${team}`, name: `${team[0].toUpperCase()}${team.slice(1)} 1`, team, connected: true };
+      io.to(previewChannel(room.code, team)).emit('playerState', playerSnapshot(room, player, true));
     }
   }
 }
@@ -634,6 +645,7 @@ function createRoom(requestedThemeId, isTestMode = false) {
 function respond(socket, event, handler) {
   socket.on(event, async (payload = {}, callback = () => {}) => {
     try {
+      if (socket.data.preview && !['previewJoin', 'previewLeave'].includes(event)) fail('Preview sockets are read-only.');
       if (socket.data.presentation && event !== 'presentationJoin') fail('Presentation sockets are read-only.');
       const result = await handler(payload);
       if (typeof callback === 'function') callback({ ok: true, ...result });
@@ -664,6 +676,14 @@ io.on('connection', (socket) => {
     const room = rooms.get(String(code || '').toUpperCase());
     if (!room || room.hostToken !== token) fail('Host token mismatch or room no longer exists.');
     if (room.session) fail('End the active session before leaving the room.');
+    socket.leave(roomChannel(room.code));
+    socket.leave(hostChannel(room.code));
+    return {};
+  });
+
+  respond(socket, 'hostExit', ({ code, token }) => {
+    const room = rooms.get(String(code || '').toUpperCase());
+    if (!room || room.hostToken !== token) fail('Host token mismatch or room no longer exists.');
     socket.leave(roomChannel(room.code));
     socket.leave(hostChannel(room.code));
     return {};
@@ -707,6 +727,30 @@ io.on('connection', (socket) => {
     const state = presentationSnapshot(room);
     socket.emit('presentationState', state);
     return { state };
+  });
+
+  respond(socket, 'previewJoin', ({ code, team }) => {
+    const roomCode = String(code || '').trim().toUpperCase();
+    const room = rooms.get(roomCode);
+    if (!room || !room.isTestMode) fail('Player previews are only available for Testing Mode rooms.');
+    if (!['blue', 'red'].includes(team)) fail('Choose a valid preview team.');
+    if (socket.data.preview) socket.leave(previewChannel(socket.data.preview.code, socket.data.preview.team));
+    socket.data.preview = { code: room.code, team };
+    socket.join(previewChannel(room.code, team));
+    const sessionTeam = room.session?.teams?.[team] || [];
+    const player = sessionTeam.map((id) => room.players.get(id)).find(Boolean) ||
+      [...room.players.values()].find((candidate) => candidate.team === team) ||
+      { id: `preview-${team}`, name: `${team[0].toUpperCase()}${team.slice(1)} 1`, team, connected: true };
+    const state = playerSnapshot(room, player, true);
+    socket.emit('playerState', state);
+    return { state };
+  });
+
+  respond(socket, 'previewLeave', () => {
+    const reference = socket.data.preview;
+    if (reference) socket.leave(previewChannel(reference.code, reference.team));
+    socket.data.preview = null;
+    return {};
   });
 
   respond(socket, 'submitAnswer', ({ answer }) => {

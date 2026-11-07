@@ -113,7 +113,7 @@
   function setRoute(route) {
     const next = route ? `#${route}` : '';
     if (window.location.hash !== next) window.location.hash = next;
-    else renderRoute();
+    renderRoute();
   }
 
   $('#host-game-link').addEventListener('click', (event) => {
@@ -129,6 +129,16 @@
     const savedHost = hostSaved();
     const savedPlayer = playerSaved();
     const params = hashRoute();
+    const query = new URLSearchParams(window.location.search);
+    if (window.location.pathname === '/play' && query.has('preview')) {
+      $('#landing-view').hidden = true;
+      $('#host-route').hidden = true;
+      $('#join-route').hidden = false;
+      $('#join-panel').hidden = true;
+      $('#player-view').hidden = false;
+      player.startPreview(query.get('room') || '', query.get('preview') || '');
+      return;
+    }
     if (params.route === 'presentation') {
       const room = params.room.trim().toUpperCase();
       if (room) window.location.replace(`/presentation?room=${encodeURIComponent(room)}`);
@@ -136,6 +146,7 @@
     }
     if (savedHost.code && savedHost.token) params.route = 'host';
     else if (savedPlayer.code && savedPlayer.playerId && savedPlayer.name) params.route = 'join';
+    if (window.location.pathname === '/play') params.route = 'join';
     const route = params.route === 'host' || params.route === 'join' ? params.route : '';
     $('#landing-view').hidden = Boolean(route);
     $('#host-route').hidden = route !== 'host';
@@ -148,7 +159,6 @@
   const host = (() => {
     let current = null;
     let editorQuestions = [];
-    let previewTeam = 'blue';
     const connection = $('#connection-status');
 
     function showMessage(text, target) {
@@ -160,7 +170,8 @@
     function request(event, extra = {}) {
       return new Promise((resolve, reject) => {
         const { code, token } = hostSaved();
-        socket.emit(event, { code, token, ...extra }, (result) => {
+        socket.timeout(8000).emit(event, { code, token, ...extra }, (timeoutError, result) => {
+          if (timeoutError) return reject(new Error('The server did not respond. Check your connection and try again.'));
           if (!result?.ok) return reject(new Error(result?.error || 'The action could not be completed.'));
           if (result.state) render(result.state);
           resolve(result);
@@ -194,8 +205,8 @@
       $('#create-panel').hidden = true;
       $('#dashboard').hidden = false;
       $('#test-mode-badge').hidden = !state.isTestMode;
-      $('#preview-player-screen').hidden = !state.isTestMode;
-      if (!state.isTestMode) $('#player-preview-modal').hidden = true;
+      $('#preview-blue-screen').hidden = !state.isTestMode;
+      $('#preview-red-screen').hidden = !state.isTestMode;
       $('#room-code').textContent = state.code;
       $('#room-theme-name').textContent = THEMES[themeId].name;
       updateShareLink();
@@ -215,7 +226,6 @@
       renderHistory();
       renderSubmissionLog();
       renderRoute();
-      if (!$('#player-preview-modal').hidden) player.renderPreview(state, previewTeam);
     }
 
     function renderPlayers() {
@@ -505,10 +515,13 @@
       const button = $('#create-room');
       button.disabled = true;
       try {
-        const result = await new Promise((resolve, reject) => socket.emit('createRoom', {
+        const result = await new Promise((resolve, reject) => socket.timeout(8000).emit('createRoom', {
           themeId: landingThemeId,
           isTestMode: $('#test-mode-toggle').checked
-        }, (reply) => reply?.ok ? resolve(reply) : reject(new Error(reply?.error || 'Could not create room.'))));
+        }, (timeoutError, reply) => {
+          if (timeoutError) return reject(new Error('The server did not respond. Check your connection and try again.'));
+          reply?.ok ? resolve(reply) : reject(new Error(reply?.error || 'Could not create room.'));
+        }));
         localStorage.setItem('feudHostCode', result.code);
         localStorage.setItem('feudHostToken', result.token);
         setRoute('host');
@@ -531,10 +544,42 @@
         $('#create-room').disabled = false;
         $('#host-leave').hidden = true;
         $('#editor-modal').hidden = true;
+        $('#host-error').hidden = true;
+        $('#host-error').textContent = '';
+        $('#message').hidden = true;
+        $('#message').textContent = '';
         setRoute('');
       } catch (error) {
         showMessage(error.message);
       }
+    }
+
+    function exitToHome() {
+      const credentials = hostSaved();
+      hostKeys.forEach((key) => localStorage.removeItem(key));
+      current = null;
+      $('#dashboard').hidden = true;
+      $('#create-panel').hidden = false;
+      $('#create-room').hidden = false;
+      $('#create-room').disabled = false;
+      $('#host-leave').hidden = true;
+      $('#editor-modal').hidden = true;
+      setRoute('');
+      if (!credentials.code || !credentials.token) return;
+      socket.timeout(2500).emit('hostExit', credentials, (timeoutError, result) => {
+        if (!timeoutError && result?.ok) return;
+        console.error('Could not leave the host room cleanly; reconnecting the socket.', timeoutError || result?.error);
+        socket.disconnect();
+        socket.connect();
+      });
+    }
+
+    function openPreview(team) {
+      if (!current?.isTestMode) return;
+      const url = new URL('/play', window.location.origin);
+      url.searchParams.set('room', current.code);
+      url.searchParams.set('preview', team);
+      window.open(url.toString(), '_blank', 'noopener');
     }
 
     $('#create-room').addEventListener('click', create);
@@ -563,26 +608,8 @@
       if (confirm('Reset the room? This clears players and all scores but keeps the question bank and theme.')) act('resetRoom');
     });
     $('#host-leave').addEventListener('click', leave);
-    $('#preview-player-screen').addEventListener('click', () => {
-      previewTeam = 'blue';
-      $('#player-preview-modal [data-preview-team="blue"]').setAttribute('aria-pressed', 'true');
-      $('#player-preview-modal [data-preview-team="red"]').setAttribute('aria-pressed', 'false');
-      $('#player-preview-modal').hidden = false;
-      player.renderPreview(current, previewTeam);
-      $('#player-preview-close').focus();
-    });
-    $('#player-preview-modal').addEventListener('click', (event) => {
-      const teamButton = event.target.closest('[data-preview-team]');
-      if (teamButton) {
-        previewTeam = teamButton.dataset.previewTeam;
-        $('#player-preview-modal [data-preview-team="blue"]').setAttribute('aria-pressed', String(previewTeam === 'blue'));
-        $('#player-preview-modal [data-preview-team="red"]').setAttribute('aria-pressed', String(previewTeam === 'red'));
-        player.renderPreview(current, previewTeam);
-      }
-      if (event.target.closest('[data-close-player-preview]') || event.target.closest('#player-preview-close')) {
-        $('#player-preview-modal').hidden = true;
-      }
-    });
+    $('#preview-blue-screen').addEventListener('click', () => openPreview('blue'));
+    $('#preview-red-screen').addEventListener('click', () => openPreview('red'));
     $('#players-list').addEventListener('click', (event) => {
       const swap = event.target.closest('[data-swap]');
       const remove = event.target.closest('[data-remove]');
@@ -785,9 +812,14 @@
     return {
       get state() { return current; },
       sync,
-      setOnline: (online) => setConnection(connection, online),
-      renderPreview,
-      updateShareLink
+      setOnline: (online) => {
+        setConnection(connection, online);
+        const message = 'Connection lost. Check your internet connection and try again.';
+        if (!online && !current && !$('#host-route').hidden) showMessage(message);
+        else if (online && $('#host-error').textContent === message) showMessage('');
+      },
+      updateShareLink,
+      exitToHome
     };
   })();
 
@@ -796,7 +828,8 @@
     let previousQuestionKey = '';
     let previousTotalStrikes = null;
     let joining = false;
-    let previewRefs = null;
+    let preview = null;
+    let previewMode = false;
     const connection = $('#player-connection');
 
     function updateStrikeFlash(question) {
@@ -828,8 +861,13 @@
     function join(code, name, playerId = '') {
       if (joining) return;
       joining = true;
-      socket.emit('joinRoom', { code, name, playerId }, (result) => {
+      socket.timeout(8000).emit('joinRoom', { code, name, playerId }, (timeoutError, result) => {
         joining = false;
+        if (timeoutError) {
+          $('#player-reconnecting').hidden = true;
+          showError('The server did not respond. Check your connection and try again.');
+          return;
+        }
         if (!result?.ok) {
           $('#player-reconnecting').hidden = true;
           showError(result?.error || 'Could not join this room.');
@@ -855,6 +893,8 @@
 
     function renderPlayerScreen(state, refs = null) {
       const get = (id) => refs ? refs.get(id) : $(`#${id}`);
+      get('answer-input').disabled = Boolean(state.readOnly);
+      get('answer-form').querySelector('button').disabled = Boolean(state.readOnly);
       const roundScores = state.roundScores || { blue: 0, red: 0 };
       get('player-room-code').textContent = `ROOM ${state.code}`;
       get('waiting-name').textContent = `Hi, ${state.player.name}.`;
@@ -929,59 +969,56 @@
       }
     }
 
-    function renderPreview(hostState, team) {
-      if (!hostState?.isTestMode) return;
-      if (!previewRefs) {
-        const preview = $('#player-view').cloneNode(true);
-        preview.hidden = false;
-        previewRefs = new Map([['player-view', preview]]);
-        preview.querySelectorAll('[id]').forEach((element) => {
-          const sourceId = element.id;
-          previewRefs.set(sourceId, element);
-          element.id = `player-preview-${sourceId}`;
-        });
-        preview.querySelectorAll('[for]').forEach((element) => {
-          element.htmlFor = `player-preview-${element.htmlFor}`;
-        });
-        previewRefs.set('waiting-message', preview.querySelector('.waiting-message'));
-        preview.id = 'player-preview-screen';
-        preview.classList.add('player-preview-screen');
-        previewRefs.get('answer-input').readOnly = true;
-        previewRefs.get('answer-form').addEventListener('submit', (event) => event.preventDefault());
-        $('#player-preview-container').replaceChildren(preview);
+    function startPreview(code, team) {
+      previewMode = true;
+      if (!code || !['blue', 'red'].includes(team)) {
+        preview = null;
+        showError('This preview link is invalid. Open the preview from the host page.');
+        return;
       }
-      const session = hostState.session;
-      const question = session?.question;
-      const simulatedPlayers = hostState.players.filter((player) => player.team === team);
-      const sessionTeamIds = session?.teams?.[team] || [];
-      const player = simulatedPlayers.find((candidate) => sessionTeamIds.includes(candidate.id)) ||
-        simulatedPlayers[0] || { id: `preview-${team}`, name: `${team[0].toUpperCase()}${team.slice(1)} 1` };
-      const playerQuestion = question ? {
-        text: question.text,
-        board: question.answers.map((answer, index) => {
-          const revealed = question.revealed.includes(index) || question.status === 'ended';
-          return {
-            revealed,
-            text: revealed ? answer.text : null,
-            points: revealed ? answer.points : null,
-            revealedBy: revealed ? (question.revealedBy?.[index] ?? null) : null
-          };
-        }),
-        status: question.status,
-        activeTeam: question.activeTeam,
-        strikes: question.strikes,
-        accumulated: question.accumulated,
-        isTyping: Boolean(question.isTyping),
-        submissionReceived: Boolean(question.submission),
-        result: question.result
-      } : null;
-      renderPlayerScreen({
-        code: hostState.code,
-        themeId: hostState.themeId,
-        player: { id: player.id, name: player.name, team, connected: true },
-        roundScores: hostState.roundScores,
-        session: session ? { ...session, question: playerQuestion } : null
-      }, previewRefs);
+      const changed = !preview || preview.code !== code.toUpperCase() || preview.team !== team;
+      preview = { code: code.toUpperCase(), team };
+      $('#leave-room').hidden = true;
+      if (changed) {
+        current = null;
+        showError('');
+        connectPreview();
+      }
+    }
+
+    function connectPreview() {
+      if (!preview || !socket.connected) return;
+      socket.timeout(8000).emit('previewJoin', preview, (timeoutError, result) => {
+        if (timeoutError) return showError('The server did not respond. Check your connection and try again.');
+        if (!result?.ok) return showError(result?.error || 'Could not open this player preview.');
+        render(result.state);
+      });
+    }
+
+    function exitToHome() {
+      const wasJoined = Boolean(current && !current.readOnly);
+      const wasPreview = previewMode;
+      playerKeys.forEach((key) => localStorage.removeItem(key));
+      current = null;
+      preview = null;
+      previewMode = false;
+      $('#player-view').hidden = true;
+      $('#join-panel').hidden = false;
+      $('#join-form').hidden = false;
+      $('#join-note').hidden = false;
+      $('.join-back-link').hidden = false;
+      $('#player-notice').hidden = true;
+      $('#join-error').hidden = true;
+      setRoute('');
+      if (wasJoined || wasPreview) {
+        const event = wasPreview ? 'previewLeave' : 'leaveRoom';
+        socket.timeout(2500).emit(event, {}, (timeoutError, result) => {
+          if (!timeoutError && result?.ok) return;
+          console.error('Could not leave the player room cleanly; reconnecting the socket.', timeoutError || result?.error);
+          socket.disconnect();
+          socket.connect();
+        });
+      }
     }
 
     function render(nextState) {
@@ -1017,12 +1054,14 @@
       event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
     });
     $('#answer-input').addEventListener('input', (event) => {
+      if (current?.readOnly) return;
       socket.emit('answerTyping', { typing: Boolean(event.target.value) }, (result) => {
         if (!result?.ok) showError(result?.error || 'Typing status could not be updated.');
       });
     });
     $('#answer-form').addEventListener('submit', (event) => {
       event.preventDefault();
+      if (current?.readOnly) return;
       const answer = $('#answer-input').value;
       if (!answer) return;
       const button = $('#answer-form button');
@@ -1067,17 +1106,45 @@
 
     return {
       reconnect,
-      setOnline: (online) => setConnection(connection, online),
-      renderPreview
+      startPreview,
+      connectPreview,
+      exitToHome,
+      setOnline: (online) => {
+        setConnection(connection, online);
+        const message = 'Connection lost. Check your internet connection and try again.';
+        const target = $('#player-view').hidden ? $('#join-error') : $('#player-notice');
+        if (!online) showError(message);
+        else if (target.textContent === message) showError('');
+      },
+      get isPreview() { return previewMode; }
     };
   })();
+
+  function navigateHome(event) {
+    event.preventDefault();
+    const credentials = hostSaved();
+    const identity = playerSaved();
+    if ((credentials.code && credentials.token) || host.state) {
+      host.exitToHome();
+    } else if ((identity.code && identity.playerId) || player.isPreview) {
+      player.exitToHome();
+    } else {
+      setRoute('');
+    }
+  }
+
+  $('#host-back-link').addEventListener('click', navigateHome);
+  $('.join-back-link').addEventListener('click', navigateHome);
+  document.querySelectorAll('.wordmark').forEach((link) => link.addEventListener('click', navigateHome));
 
   socket.on('connect', () => {
     host.setOnline(true);
     player.setOnline(true);
     const credentials = hostSaved();
     const identity = playerSaved();
-    if (credentials.code && credentials.token) {
+    if (player.isPreview) {
+      player.connectPreview();
+    } else if (credentials.code && credentials.token) {
       renderRoute();
       host.sync();
     } else if (identity.code && identity.playerId && identity.name) {

@@ -171,10 +171,10 @@
         <div class="editor-toolbar">
           <button id="add-question" class="button button-outline" type="button">＋ Add question</button>
           <div><button id="export-questions" class="button button-quiet" type="button">Export JSON</button><button id="import-questions" class="button button-quiet" type="button">Import file</button><input id="import-file" type="file" accept=".json,application/json" hidden></div>
-          <details class="json-paste"><summary>Import pasted JSON</summary><textarea id="import-text" rows="5" placeholder='[{"text":"Name a pizza topping.","answers":[{"text":"Pepperoni","points":30}]}]'></textarea><button id="import-pasted" class="button button-outline" type="button">Import pasted JSON</button></details>
+          <details class="json-paste"><summary>Import pasted JSON</summary><textarea id="import-text" rows="5" placeholder='[{"text":"Name a pizza topping.","maxStrikes":3,"answers":[{"text":"Pepperoni","points":30}]}]'></textarea><button id="import-pasted" class="button button-outline" type="button">Import pasted JSON</button></details>
         </div>
         <div id="question-editor-list" class="question-editor-list"></div>
-        <footer class="editor-footer"><span>Each question needs at least two answers with positive whole-number points.</span><button id="save-questions" class="button button-primary" type="button">Save questions</button></footer>
+        <footer class="editor-footer"><span>Each question needs at least two answers with positive whole-number points and a positive integer Max Strikes limit.</span><button id="save-questions" class="button button-primary" type="button">Save questions</button></footer>
       </section>
       <div id="export-modal" class="export-modal" hidden>
         <div class="modal-backdrop" data-close-export></div>

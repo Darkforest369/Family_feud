@@ -273,6 +273,7 @@ function previewChannel(code, team) { return `preview:${code}:${team}`; }
 function safeQuestions(questions) {
   return questions.map((item) => ({
     question: item.question,
+    maxStrikes: item.maxStrikes ?? 3,
     answers: item.answers.map((answer) => ({ ...answer }))
   }));
 }
@@ -310,6 +311,7 @@ function hostSnapshot(room) {
       submissionLog: session.submissionLog,
       question: session.question ? {
         text: session.question.text,
+        maxStrikes: session.question.maxStrikes,
         answers: session.question.answers,
         revealed: session.question.revealed,
         revealedBy: session.question.revealedBy,
@@ -385,6 +387,7 @@ function presentationSnapshot(room) {
       finalScoreShown: Boolean(session.finalScoreShown),
       question: session.question ? {
         text: session.question.text,
+        maxStrikes: session.question.maxStrikes,
         answers: session.question.answers.map((answer, index) => {
           const revealed = session.question.revealed.includes(index) || session.question.status === 'ended';
           return {
@@ -537,7 +540,7 @@ function applyStrike(room, note = 'Strike added.') {
   question.submission = null;
   question.typingPlayerId = null;
   question.result = note;
-  if (question.strikes[question.activeTeam] >= 3) {
+  if (question.strikes[question.activeTeam] >= question.maxStrikes) {
     beginSteal(room);
   }
 }
@@ -572,6 +575,7 @@ function initializeQuestion(room, index) {
   session.message = '';
   session.question = {
     text: source.question,
+    maxStrikes: source.maxStrikes,
     answers: [...source.answers],
     revealed: [],
     revealedBy: Array(source.answers.length).fill(null),
@@ -597,6 +601,10 @@ function validateQuestions(value) {
   return value.map((item, index) => {
     const question = item?.question;
     if (typeof question !== 'string' || !question.trim() || question.length > 180) fail(`Question ${index + 1} needs question text (up to 180 characters).`);
+    const maxStrikes = item.maxStrikes === undefined ? 3 : item.maxStrikes;
+    if (!Number.isSafeInteger(maxStrikes) || maxStrikes < 1) {
+      fail(`Question ${index + 1}: maxStrikes must be a positive integer.`);
+    }
     if (!Array.isArray(item.answers) || item.answers.length < 2 || item.answers.length > 12) {
       fail(`Question ${index + 1} needs 2 to 12 answers.`);
     }
@@ -612,7 +620,7 @@ function validateQuestions(value) {
     if (new Set(answers.map((answer) => normalizeAnswer(answer.text))).size !== answers.length) {
       fail(`Question ${index + 1} has duplicate answers.`);
     }
-    return { question, answers };
+    return { question, maxStrikes, answers };
   });
 }
 

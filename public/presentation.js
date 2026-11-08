@@ -144,11 +144,12 @@
 
   function renderStrikes(question) {
     const strikes = question?.strikes || { blue: 0, red: 0 };
+    const maxStrikes = question?.maxStrikes ?? 3;
     ['blue', 'red'].forEach((team) => {
-      const count = Math.max(0, Math.min(3, Number(strikes[team]) || 0));
+      const count = Math.max(0, Math.min(maxStrikes, Number(strikes[team]) || 0));
       const element = $(`#presentation-${team}-strikes`);
-      element.setAttribute('aria-label', `${team.toUpperCase()} team: ${count} of 3 strikes`);
-      element.innerHTML = Array.from({ length: 3 }, (_, index) => {
+      element.setAttribute('aria-label', `${team.toUpperCase()} team: ${count} of ${maxStrikes} strikes`);
+      element.innerHTML = Array.from({ length: maxStrikes }, (_, index) => {
         const isStrike = index < count;
         const animate = isStrike && count > previousStrikes[team] && index === count - 1;
         return `<span class="${isStrike ? 'strike-on' : ''}${animate ? ' strike-arrive' : ''}" aria-hidden="true">${isStrike ? '×' : '○'}</span>`;

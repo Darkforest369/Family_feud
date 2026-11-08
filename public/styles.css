@@ -427,6 +427,8 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .question-card-head .question-field { flex: 1; }
 .question-card-head .button { min-height: 34px; padding: 6px 9px; font-size: .7rem; }
 .question-field { width: 100%; min-height: 39px; padding: 8px 10px; font-size: .82rem; }
+.question-max-strikes { display: flex; width: fit-content; align-items: center; gap: 9px; color: var(--muted); font-size: .72rem; font-weight: 900; }
+.question-max-strikes input { width: 84px; min-height: 35px; padding: 6px 8px; }
 .answer-editor-list { display: grid; gap: 6px; margin: 9px 0; }
 .answer-editor-row { display: grid; grid-template-columns: minmax(0, 1fr) 80px 30px 30px 36px; gap: 6px; }
 .answer-editor-row input { min-height: 35px; padding: 6px 8px; font-size: .78rem; }
@@ -517,11 +519,12 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 .presentation-scoreboard .score-center { min-width: clamp(100px, 15vw, 210px); font-size: clamp(.65rem, 1.05vw, 1rem); }
 .presentation-scoreboard .score-center strong { color: var(--theme-text); font-size: clamp(1.6rem, 3vw, 3rem); line-height: 1; }
 .presentation-game { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: clamp(6px, 1.2vh, 14px) 0 0; }
-.presentation-active-team { flex: 0 0 auto; margin: 0 0 clamp(3px, .7vh, 8px); font-size: clamp(.85rem, 2.1vh, 1.5rem); font-weight: 1000; letter-spacing: .08em; text-align: center; }
+.presentation-question-box { flex: 0 0 auto; width: 100%; margin: 0 0 clamp(8px, 1.4vh, 16px); padding: clamp(10px, 1.8vh, 20px) clamp(12px, 2vw, 26px); border: 1px solid var(--theme-border); border-radius: 8px; background: color-mix(in srgb, var(--theme-surface) 88%, transparent); box-shadow: 0 5px 18px rgba(20,52,38,.09); text-align: center; }
+.presentation-active-team { flex: 0 0 auto; margin: 0 0 clamp(4px, .8vh, 9px); font-size: clamp(.8rem, 1.8vh, 1.25rem); font-weight: 1000; letter-spacing: .08em; text-align: center; }
 .presentation-active-team.blue { color: var(--team-blue); text-shadow: 0 0 18px var(--team-blue-bg); }
 .presentation-active-team.red { color: var(--team-red); text-shadow: 0 0 18px var(--team-red-bg); }
 .presentation-active-team.steal { text-decoration: underline; text-decoration-thickness: .12em; text-underline-offset: .18em; }
-.presentation-question { flex: 0 1 auto; max-width: 100%; max-height: 28vh; min-height: 0; margin: 0 0 clamp(4px, .8vh, 9px); overflow: hidden; font-family: "Times New Roman", Times, serif; font-size: clamp(1rem, 3.5vw, 4rem); font-weight: 800; line-height: 1.03; text-align: center; overflow-wrap: break-word; text-wrap: balance; }
+.presentation-question { flex: 0 1 auto; max-width: 100%; max-height: 28vh; min-height: 0; margin: 0; overflow: hidden; font-family: "Times New Roman", Times, serif; font-size: clamp(1rem, 3.5vw, 4rem); font-weight: 800; line-height: 1.03; text-align: center; overflow-wrap: break-word; text-wrap: balance; }
 .presentation-submission { flex: 0 0 auto; width: 100%; min-width: 0; margin: 0 0 clamp(5px, 1vh, 12px); overflow: hidden; border: 2px solid var(--theme-border-strong); border-radius: 8px; padding: clamp(7px, 1.2vh, 13px) clamp(10px, 1.5vw, 20px); background: var(--theme-surface-alt); color: var(--theme-text); font-size: clamp(.78rem, 1.8vh, 1.35rem); font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
 .presentation-submission.blue { border-color: var(--team-blue); background: var(--team-blue-bg); color: var(--team-blue-text); }
 .presentation-submission.red { border-color: var(--team-red); background: var(--team-red-bg); color: var(--team-red-text); }

@@ -298,7 +298,10 @@
       ['blue', 'red'].forEach((team) => {
         const element = $(`#${team}-strikes`);
         element.className = `strike-team ${team}`;
-        element.querySelector('i').innerHTML = Array.from({ length: 3 }, (_, index) => `<span class="${index < question.strikes[team] ? 'strike-on' : ''}">${index < question.strikes[team] ? '×' : '○'}</span>`).join(' ');
+        const maxStrikes = question.maxStrikes ?? 3;
+        const count = Number(question.strikes[team]) || 0;
+        element.setAttribute('aria-label', `${team.toUpperCase()} team: ${count} of ${maxStrikes} strikes`);
+        element.querySelector('i').innerHTML = Array.from({ length: maxStrikes }, (_, index) => `<span class="${index < count ? 'strike-on' : ''}">${index < count ? '×' : '○'}</span>`).join(' ');
       });
       $('#submission-box').hidden = !question.submission || !activeGame;
       $('#submission-box').className = `submission-box${question.submission ? ` ${question.submission.team}` : ''}`;
@@ -408,6 +411,9 @@
             <button class="button button-quiet" data-move="down" ${questionIndex === editorQuestions.length - 1 ? 'disabled' : ''} title="Move question down">↓</button>
             <button class="button button-quiet" data-delete-question>Delete</button>
           </div>
+          <label class="question-max-strikes">Max Strikes
+            <input data-question-field="maxStrikes" type="number" min="1" step="1" required value="${escape(item.maxStrikes ?? 3)}" aria-label="Maximum strikes for question ${questionIndex + 1}">
+          </label>
           <div class="answer-editor-list">${item.answers.map((answer, answerIndex) => `
             <div class="answer-editor-row" data-answer="${answerIndex}">
               <input data-answer-field="text" value="${escape(answer.text)}" aria-label="Answer ${answerIndex + 1}">
@@ -423,7 +429,7 @@
 
     function closeEditor() { $('#editor-modal').hidden = true; }
 
-    // Canonical question JSON schema: [{ "text": "...", "answers": [{ "text": "...", "points": 30 }] }].
+    // Canonical question JSON schema: [{ "text": "...", "maxStrikes": 3, "answers": [{ "text": "...", "points": 30 }] }].
     function parseImportedQuestions(text) {
       let parsed;
       try {
@@ -444,11 +450,15 @@
       const imported = parsed.map((item, questionIndex) => {
         const q = questionIndex + 1;
         if (!item || typeof item !== 'object' || Array.isArray(item) ||
-            Object.keys(item).some((key) => !['text', 'answers'].includes(key))) {
-          throw new Error(`Question ${q}: use only "text" and "answers" fields.`);
+            Object.keys(item).some((key) => !['text', 'maxStrikes', 'answers'].includes(key))) {
+          throw new Error(`Question ${q}: use only "text", "maxStrikes", and "answers" fields.`);
         }
         if (typeof item.text !== 'string' || !item.text.trim() || item.text.length > 180) {
           throw new Error(`Question ${q}: text must be a non-empty string of at most 180 characters.`);
+        }
+        const maxStrikes = item.maxStrikes === undefined ? 3 : item.maxStrikes;
+        if (!Number.isSafeInteger(maxStrikes) || maxStrikes < 1) {
+          throw new Error(`Question ${q}: maxStrikes must be a positive integer.`);
         }
         if (!Array.isArray(item.answers) || item.answers.length < 2 || item.answers.length > 12) {
           throw new Error(`Question ${q}: provide 2 to 12 answers.`);
@@ -475,7 +485,7 @@
           seen.add(normalized);
           return { text: answer.text, points: answer.points };
         });
-        return { question: item.text, answers };
+        return { question: item.text, maxStrikes, answers };
       });
       return imported;
     }
@@ -656,7 +666,11 @@
       if (!card) return;
       const questionIndex = Number(card.dataset.question);
       const questionField = event.target.dataset.questionField;
-      if (questionField) editorQuestions[questionIndex][questionField] = event.target.value;
+      if (questionField) {
+        editorQuestions[questionIndex][questionField] = questionField === 'maxStrikes'
+          ? event.target.valueAsNumber
+          : event.target.value;
+      }
       const answerRow = event.target.closest('[data-answer]');
       const answerField = event.target.dataset.answerField;
       if (answerRow && answerField) editorQuestions[questionIndex].answers[Number(answerRow.dataset.answer)][answerField] = event.target.value;
@@ -697,10 +711,17 @@
       } catch (error) { showMessage(error.message, $('#editor-message')); }
     });
     function canonicalQuestionExport(questions = editorQuestions) {
-      return questions.map((item) => ({
-        text: item.question,
-        answers: item.answers.map((answer) => ({ text: answer.text, points: answer.points }))
-      }));
+      return questions.map((item, index) => {
+        const maxStrikes = item.maxStrikes ?? 3;
+        if (!Number.isSafeInteger(maxStrikes) || maxStrikes < 1) {
+          throw new Error(`Question ${index + 1}: maxStrikes must be a positive integer.`);
+        }
+        return {
+          text: item.question,
+          maxStrikes,
+          answers: item.answers.map((answer) => ({ text: answer.text, points: answer.points }))
+        };
+      });
     }
     function setExportMessage(text, error = false) {
       const target = $('#export-error');

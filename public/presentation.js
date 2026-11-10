@@ -27,7 +27,7 @@
   if (roomCode) localStorage.setItem(presentationKey, roomCode);
   let publicBase = window.location.origin;
   let hasJoined = false;
-  let renderedQuestionText = '';
+  let renderedQuestionKey = '';
   let previousStrikes = { blue: 0, red: 0 };
   let previousAudioQuestionKey = '';
   let previousAudioStrikes = null;
@@ -213,14 +213,17 @@
     $('#presentation-final').hidden = true;
     $('#presentation-game').hidden = false;
     const questionText = question?.text || 'Waiting for the host to start a question';
+    const questionKey = state.session
+      ? `${state.session.number}:${state.session.questionIndex}`
+      : '';
     const answerBoard = $('#presentation-answer-board');
-    const isSameQuestion = renderedQuestionText === questionText;
+    const isSameQuestion = renderedQuestionKey === questionKey;
     const previousRevealed = new Set(
       [...answerBoard.querySelectorAll('.presentation-answer-tile.revealed')]
         .map((tile) => tile.dataset.answerIndex)
     );
     $('#presentation-question').textContent = questionText;
-    renderedQuestionText = questionText;
+    renderedQuestionKey = questionKey;
     const submissionBox = $('#presentation-submission');
     submissionBox.hidden = !question?.submission;
     submissionBox.className = `presentation-submission${question?.submission ? ` ${question.submission.team}` : ''}`;
@@ -233,22 +236,38 @@
           : 'unmatched';
       const animateReveal = answer.revealed && isSameQuestion && !previousRevealed.has(String(index));
       const classes = answer.revealed
-        ? `answer-tile presentation-answer-tile revealed ${ownerClass}${animateReveal ? ' presentation-reveal' : ''}`
+        ? `answer-tile presentation-answer-tile revealed ${ownerClass}${animateReveal ? ' presentation-reveal-pending' : ''}`
         : 'answer-tile presentation-answer-tile';
       return `<div class="${classes}" data-answer-index="${index}">
         <span class="answer-index">${index + 1}</span>
         <div class="presentation-answer-flipper">
-          <div class="presentation-answer-face presentation-answer-front">
-            <span class="presentation-answer-placeholder" aria-label="Hidden answer">?</span>
-          </div>
-          <div class="presentation-answer-face presentation-answer-back">
-            ${answer.revealed
-              ? `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>`
-              : ''}
+          <div class="presentation-answer-face">
+            ${animateReveal || !answer.revealed
+              ? '<span class="presentation-answer-placeholder" aria-label="Hidden answer">?</span>'
+              : `<span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span>`}
           </div>
         </div>
       </div>`;
     }).join('');
+
+    answerBoard.querySelectorAll('.presentation-reveal-pending').forEach((tile) => {
+      const flipper = tile.querySelector('.presentation-answer-flipper');
+      const answer = question.answers[Number(tile.dataset.answerIndex)];
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reducedMotion) {
+        flipper.innerHTML = `<div class="presentation-answer-face"><span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span></div>`;
+        tile.classList.remove('presentation-reveal-pending');
+        return;
+      }
+
+      flipper.addEventListener('transitionend', (event) => {
+        if (event.propertyName !== 'transform' || !tile.classList.contains('presentation-reveal-pending')) return;
+        flipper.innerHTML = `<div class="presentation-answer-face"><span class="answer-copy">${escape(answer.text)}</span><span class="answer-points">${answer.points}</span></div>`;
+        tile.classList.remove('presentation-reveal-pending');
+        tile.classList.remove('presentation-reveal-turning');
+      }, { once: true });
+      requestAnimationFrame(() => tile.classList.add('presentation-reveal-turning'));
+    });
   }
 
   function join() {

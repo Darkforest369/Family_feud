@@ -158,6 +158,7 @@
 
   const host = (() => {
     let current = null;
+    let renderedHostQuestionKey = '';
     let editorQuestions = [];
     const connection = $('#connection-status');
 
@@ -282,11 +283,19 @@
       $('#active-team').className = `active-team ${question.activeTeam}`;
       $('#active-team').lastElementChild.textContent = `${question.activeTeam.toUpperCase()} TEAM ${question.status === 'steal' ? '· STEAL' : '· ACTIVE'}`;
       $('#question-points').textContent = question.accumulated;
-      $('#answer-board').innerHTML = question.answers.map((answer, index) => {
+      const answerBoard = $('#answer-board');
+      const questionKey = `${session.number}:${session.questionIndex}`;
+      const isSameQuestion = renderedHostQuestionKey === questionKey;
+      const previousRevealed = new Set(
+        [...answerBoard.querySelectorAll('.host-answer-tile.revealed')]
+          .map((tile) => tile.dataset.revealAnswer)
+      );
+      answerBoard.innerHTML = question.answers.map((answer, index) => {
         const revealed = question.revealed.includes(index) || question.status === 'ended';
         const owner = revealed ? (question.revealedBy?.[index] ?? null) : null;
         const ownerClass = owner === 'blue' ? 'blue' : owner === 'red' ? 'red' : 'unmatched';
-        const classes = `answer-tile host-answer-tile${revealed ? ` revealed ${ownerClass}` : ''}`;
+        const animateReveal = revealed && isSameQuestion && !previousRevealed.has(String(index));
+        const classes = `answer-tile host-answer-tile${revealed ? ` revealed ${ownerClass}` : ''}${animateReveal ? ' host-answer-reveal' : ''}`;
         const indicator = revealed ? '✓' : '✗';
         return `<button class="${classes}" type="button" data-reveal-answer="${index}" aria-label="${revealed ? 'Revealed' : 'Unrevealed'} answer ${index + 1}: ${escape(answer.text)}, ${answer.points} points">
           <span class="answer-index">${index + 1}</span>
@@ -295,6 +304,7 @@
           <span class="answer-points">${answer.points}</span>
         </button>`;
       }).join('');
+      renderedHostQuestionKey = questionKey;
       ['blue', 'red'].forEach((team) => {
         const element = $(`#${team}-strikes`);
         element.className = `strike-team ${team}`;

@@ -498,11 +498,11 @@ input:focus { border-color: var(--pine); box-shadow: 0 0 0 3px rgba(23,74,56,.12
 
 .presentation-page { height: 100vh; min-height: 0; overflow: hidden; background: var(--theme-bg); color: var(--theme-text); }
 .presentation-shell { position: relative; display: flex; height: 100vh; min-height: 0; flex-direction: column; overflow: hidden; width: min(1400px, 100%); margin: 0 auto; padding: clamp(8px, 2vh, 20px) clamp(10px, 3vw, 38px); }
-.presentation-shell > .room-banner { flex: 0 0 auto; padding: clamp(16px, 3vh, 32px) clamp(16px, 2vw, 28px); }
-.presentation-page .room-code { font-size: clamp(2.4rem, 6vh, 4.5rem); }
-.presentation-page .join-url { font-size: clamp(1rem, 2.4vh, 1.5rem); }
-.presentation-page .qr-share { gap: 8px; font-size: clamp(.85rem, 1.8vh, 1.1rem); }
-.presentation-page .qr-share img { width: clamp(276px, 30vh, 360px); height: clamp(276px, 30vh, 360px); min-width: max(276px, 24vh); min-height: max(276px, 24vh); }
+.presentation-shell > .room-banner { flex: 0 0 auto; padding: clamp(16px, 3vh, 34px) clamp(24px, 4vw, 44px); }
+.presentation-page .room-code { font-size: clamp(3rem, 8vh, 5.6rem); }
+.presentation-page .join-url { font-size: 1.6rem; }
+.presentation-page .qr-share { gap: 10px; font-size: 1.3rem; }
+.presentation-page .qr-share img { width: clamp(116px, 22vh, 184px); height: clamp(116px, 22vh, 184px); padding: 10px; }
 .presentation-sound-enable { margin-top: 7px; padding: 6px 9px; border: 1px solid var(--theme-primary-muted); border-radius: 4px; background: var(--theme-surface); color: var(--theme-primary-text); font-size: .72rem; font-weight: 800; cursor: pointer; }
 .presentation-sound-enable:disabled { cursor: not-allowed; opacity: .7; }
 .presentation-reconnecting, .presentation-error { position: absolute; z-index: 5; right: 12px; margin: 0; padding: 6px 10px; border-radius: 4px; background: var(--theme-surface); font-size: .85rem; font-weight: 800; }
